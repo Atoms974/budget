@@ -230,10 +230,6 @@ if page == "🏠 Tableau de bord":
                 margin=dict(t=20,b=20,l=20,r=20)
             )
             st.plotly_chart(fig_bar, width='stretch', theme="streamlit")
-
-    st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
-
-    # ... (Garde le code de ton graphique d'évolution mensuelle 'fig_line' exactement comme il était) ...
             
     st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
 
