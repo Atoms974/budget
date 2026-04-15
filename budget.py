@@ -250,6 +250,40 @@ if page == "🏠 Tableau de bord":
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig_line, on_select="ignore", theme="streamlit")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PAGE : JOURNAL DES DONNÉES (NOUVEAU)
+# ──────────────────────────────────────────────────────────────────────────────
+elif page == "🔍 Journal des données":
+    st.markdown('<div class="page-title">Journal des transactions</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Vue brute de la base de données</div>', unsafe_allow_html=True)
+    
+    df = load_transactions()
+    
+    if df.empty:
+        st.info("La base de données est vide.")
+    else:
+        # Filtres de recherche
+        c1, c2, c3 = st.columns([2, 2, 2])
+        with c1:
+            search = st.text_input("🔍 Rechercher un libellé", "")
+        with c2:
+            compte_f = st.multiselect("Compte", df['compte'].unique())
+        with c3:
+            cat_f = st.multiselect("Catégorie", df['categorie'].unique())
+
+        df_filtered = df.copy()
+        if search:
+            df_filtered = df_filtered[df_filtered['libelle'].str.contains(search, case=False, na=False)]
+        if compte_f:
+            df_filtered = df_filtered[df_filtered['compte'].isin(compte_f)]
+        if cat_f:
+            df_filtered = df_filtered[df_filtered['categorie'].isin(cat_f)]
+
+        st.dataframe(df_filtered[['date', 'compte', 'libelle', 'montant', 'categorie', 'sous_categorie']], 
+                     width='stretch', height=600)
+        
+        st.download_button("📥 Exporter en CSV", df_filtered.to_csv(index=False
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
@@ -310,42 +344,39 @@ elif page == "📥 Importer CSV":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📊 Analyse détaillée":
     st.markdown('<div class="page-title">Analyse détaillée</div>', unsafe_allow_html=True)
-    df = load_transactions()
+    df_all = load_transactions()
     
-    if df.empty:
+    if df_all.empty:
         st.info("Aucune donnée.")
         st.stop()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        annees_dispo = sorted(df['annee'].unique(), reverse=True)
+        annees_dispo = sorted(df_all['annee'].unique(), reverse=True)
         annee_sel = st.multiselect("Années", annees_dispo, default=[annees_dispo[0]])
     with c2:
-        comptes_dispo = sorted(df['compte'].unique().tolist())
-        comptes_sel = st.multiselect("Comptes", comptes_dispo, default=comptes_dispo)
+        # --- AJOUT DU FILTRE PAR MOIS ---
+        mois_dispo = sorted(df_all[df_all['annee'].isin(annee_sel)]['mois_label'].unique()) if annee_sel else []
+        mois_sel = st.multiselect("Mois spécifiques", mois_dispo)
     with c3:
-        cats_dispo = [c for c in df['categorie'].unique().tolist() if pd.notna(c)]
-        cats_sel = st.multiselect("Catégories", cats_dispo, default=cats_dispo)
-    with c4:
         type_sel = st.radio("Type", ["Dépenses", "Revenus", "Tout"], horizontal=True)
 
-    df = df[df['annee'].isin(annee_sel)] if annee_sel else df
-    df = df[df['compte'].isin(comptes_sel)] if comptes_sel else df
-    df = df[df['categorie'].isin(cats_sel)] if cats_sel else df
+    df = df_all.copy()
+    if annee_sel: df = df[df['annee'].isin(annee_sel)]
+    if mois_sel: df = df[df['mois_label'].isin(mois_sel)]
     
     if type_sel == "Dépenses":
-        df = df[df['montant'] < 0].copy()
+        df = df[df['montant'] < 0]
         df['montant'] = df['montant'].abs()
     elif type_sel == "Revenus":
         df = df[df['montant'] > 0]
 
-    pivot_view = st.radio("Vue", ["Catégorie", "Catégorie + Sous-catégorie"], horizontal=True)
-
+    st.markdown('<div class="section-title">Tableau croisé par mois</div>', unsafe_allow_html=True)
     if not df.empty:
-        idx = ['categorie'] if pivot_view == "Catégorie" else ['categorie', 'sous_categorie']
-        tcd = df.pivot_table(index=idx, columns='mois_label', values='montant', aggfunc='sum', fill_value=0, margins=True, margins_name='TOTAL')
-        tcd = tcd.round(2)
+        tcd = df.pivot_table(index=['categorie', 'sous_categorie'], columns='mois_label', values='montant', aggfunc='sum', fill_value=0)
         st.dataframe(tcd, width='stretch')
+    else:
+        st.warning("Aucune donnée pour cette sélection.")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : RÈGLES DE CATÉGORIES
