@@ -188,7 +188,7 @@ if page == "🏠 Tableau de bord":
                 legend=dict(orientation="h", yanchor="bottom", y=-0.2) # Légende en dessous pour gagner de la place
             )
             # On utilise le thème streamlit pour que le texte devienne BLANC automatiquement sur fond BLEU
-            st.plotly_chart(fig_pie, use_container_width=True, theme="streamlit") 
+            st.plotly_chart(fig_pie, on_select="ignore", theme="streamlit") 
 
     with col_g2:
         if not df_dep.empty:
@@ -203,8 +203,8 @@ if page == "🏠 Tableau de bord":
                 coloraxis_showscale=False, 
                 margin=dict(t=20,b=20,l=20,r=20)
             )
-            st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
-
+            st.plotly_chart(fig_bar, on_select="ignore", theme="streamlit")
+            
     st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
 
     monthly = df.groupby('mois_label').agg(
@@ -223,7 +223,7 @@ if page == "🏠 Tableau de bord":
         margin=dict(t=30,b=20,l=20,r=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    st.plotly_chart(fig_line, use_container_width=True, theme="streamlit")
+    st.plotly_chart(fig_line, on_select="ignore", theme="streamlit")
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
