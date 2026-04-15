@@ -283,59 +283,49 @@ elif page == "🔍 Journal des données":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "📥 Importer CSV":
-    st.markdown('<div class="page-title">Importer un CSV</div>', unsafe_allow_html=True)
-
-    compte_nom = st.selectbox("Compte source", ["Compte Courant Principal", "Compte Courant Secondaire", "Compte Épargne / Joint", "Autre..."])
-    if compte_nom == "Autre...": compte_nom = st.text_input("Nom du compte")
-
-    uploaded = st.file_uploader("Fichier CSV", type=["csv", "txt"])
-
+elif page == "📥 Import CSV":
+    st.markdown('<div class="page-title">Importer des transactions</div>', unsafe_allow_html=True)
+    compte_nom = st.text_input("Nom du compte (ex: Compte Courant)", "Principal")
+    uploaded = st.file_uploader("Choisir un fichier CSV", type="csv")
+    
     if uploaded:
-        for sep in [';', ',', '\t', '|']:
-            try:
-                df_raw = pd.read_csv(uploaded, sep=sep, engine='python', encoding='utf-8-sig')
-                if len(df_raw.columns) >= 2: break
-            except: continue
+        df_raw = pd.read_csv(uploaded, sep=None, engine='python')
+        st.write("Aperçu du fichier :")
+        st.dataframe(df_raw.head(3))
         
-        st.dataframe(df_raw.head(3), width='stretch')
         cols = df_raw.columns.tolist()
-        
         c1, c2, c3 = st.columns(3)
-        col_date  = c1.selectbox("📅 Colonne Date", cols, index=0)
-        col_lib   = c2.selectbox("📝 Colonne Libellé", cols, index=min(1,len(cols)-1))
-        col_mt    = c3.selectbox("💶 Colonne Montant", cols, index=min(2,len(cols)-1))
-
-        if st.button("✅ Valider et envoyer vers Supabase"):
+        col_d = c1.selectbox("Date", cols)
+        col_l = c2.selectbox("Libellé", cols)
+        col_m = c3.selectbox("Montant", cols)
+        
+        if st.button("🚀 Lancer l'importation"):
             regles = get_regles()
             to_insert = []
-            
             for _, row in df_raw.iterrows():
-                lib = str(row[col_lib])
-                cat, sub = categoriser(lib, regles)
-                
-                mt = str(row[col_mt]).replace(r'\s', '').replace(' ', '').replace(',', '.')
-                try: mt_float = float(mt)
+                try:
+                    # FIX DATE : On force le jour en premier pour éviter l'erreur de Janvier
+                    dt = pd.to_datetime(row[col_d], dayfirst=True)
+                    # FIX MONTANT : On nettoie les espaces et virgules
+                    mt = float(str(row[col_m]).replace(',','.').replace(' ',''))
+                    cat, sub = categoriser(row[col_l], regles)
+                    
+                    to_insert.append({
+                        "date": dt.strftime('%Y-%m-%d'), "libelle": row[col_l],
+                        "montant": mt, "compte": compte_nom, "categorie": cat, "sous_categorie": sub
+                    })
                 except: continue
-
-                to_insert.append({
-                    try:date_obj = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
-                        date_str = date_obj.strftime('%Y-%m-%d')
-                   except: continue # On saute la ligne si la date est illisible
-                    "libelle": lib,
-                    "montant": mt_float,
-                    "compte": compte_nom,
-                    "categorie": cat,
-                    "sous_categorie": sub,
-                    "type": "Revenu" if mt_float > 0 else "Dépense"
-                })
             
             if to_insert:
-                try:
-                    res = supabase.table("transactions").upsert(to_insert, on_conflict="date,libelle,montant,compte").execute()
-                    st.success(f"✅ Import terminé ! Lignes traitées vers le Cloud.")
-                except Exception as e:
-                    st.error(f"Erreur d'insertion : {e}")
+                supabase.table("transactions").upsert(to_insert, on_conflict="date,libelle,montant,compte").execute()
+                st.success("Données envoyées !")
+                st.rerun()
+
+    st.divider()
+    if st.button("⚠️ VIDER TOUTE LA BASE (RESET)"):
+        supabase.table("transactions").delete().neq("id", 0).execute()
+        st.warning("Base vidée.")
+        st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : ANALYSE DÉTAILLÉE
