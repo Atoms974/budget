@@ -66,32 +66,26 @@ st.set_page_config(page_title="Budget Cloud", layout="wide", page_icon="💳")
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
-/* Sidebar */
-[data-testid="stSidebar"] { background: #0f172a; border-right: 1px solid #1e293b; }
-[data-testid="stSidebar"] * { color: #94a3b8 !important; }
-[data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2 { color: #f1f5f9 !important; }
-[data-testid="stSidebarNav"] { display: none; }
+/* On enlève les couleurs de fond forcées pour laisser le mode sombre de Streamlit agir */
+.main { padding: 2rem; }
 
-/* Main bg */
-.main { background: #f8fafc; }
+/* Titres qui s'adaptent au thème */
+.page-title { font-family: 'DM Serif Display', serif; font-size: 2.4rem; margin-bottom: 0.2rem; }
+.section-title { font-family: 'DM Serif Display', serif; font-size: 1.3rem; margin: 1.5rem 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(128,128,128,0.2); }
 
-/* Titles */
-.page-title { font-family: 'DM Serif Display', serif; font-size: 2.4rem; color: #0f172a; margin-bottom: 0.2rem; letter-spacing: -0.5px; }
-.page-sub { color: #64748b; font-size: 0.95rem; margin-bottom: 2rem; font-weight: 300; }
-.section-title { font-family: 'DM Serif Display', serif; font-size: 1.3rem; color: #0f172a; margin: 1.5rem 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 2px solid #f1f5f9; }
-
-/* KPI Cards */
-.kpi-card { background: white; border-radius: 16px; padding: 1.4rem 1.6rem; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.kpi-label { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; margin-bottom: 0.5rem; }
-.kpi-value { font-family: 'DM Serif Display', serif; font-size: 2rem; color: #0f172a; }
-.kpi-value.neg { color: #ef4444; }
-.kpi-value.pos { color: #10b981; }
-
-.alert-box { background: #fef3c7; border: 1px solid #fbbf24; border-radius: 10px; padding: 0.8rem 1rem; font-size: 0.88rem; color: #92400e; }
+/* Cartes KPI transparentes avec bordure légère pour le mode sombre */
+.kpi-card { 
+    background: rgba(255, 255, 255, 0.05); 
+    border-radius: 16px; 
+    padding: 1.4rem; 
+    border: 1px solid rgba(128,128,128,0.2); 
+}
+.kpi-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: #94a3b8; }
+.kpi-value { font-family: 'DM Serif Display', serif; font-size: 1.8rem; }
 </style>
 """, unsafe_allow_html=True)
 
