@@ -196,7 +196,7 @@ if page == "🏠 Tableau de bord":
             )
             # Ajout d'une petite astuce pour formater les nombres au survol
             fig_sun.update_traces(hovertemplate='<b>%{label}</b><br>Montant: %{value:.2f} €<br>Part: %{percentParent:.1%}')
-            st.plotly_chart(fig_sun, use_container_width=True, theme="streamlit") 
+            st.plotly_chart(fig_sun, width='stretch', theme="streamlit") 
 
     with col_g2:
         if not df_dep.empty:
@@ -229,7 +229,7 @@ if page == "🏠 Tableau de bord":
                 ),
                 margin=dict(t=20,b=20,l=20,r=20)
             )
-            st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
+            st.plotly_chart(fig_bar, width='stretch', theme="streamlit")
 
     st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
 
