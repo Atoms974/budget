@@ -242,7 +242,7 @@ elif page == "📥 Importer CSV":
                 if len(df_raw.columns) >= 2: break
             except: continue
         
-        st.dataframe(df_raw.head(3), use_container_width=True)
+        st.dataframe(df_raw.head(3), width='stretch')
         cols = df_raw.columns.tolist()
         
         c1, c2, c3 = st.columns(3)
@@ -319,7 +319,7 @@ elif page == "📊 Analyse détaillée":
         idx = ['categorie'] if pivot_view == "Catégorie" else ['categorie', 'sous_categorie']
         tcd = df.pivot_table(index=idx, columns='mois_label', values='montant', aggfunc='sum', fill_value=0, margins=True, margins_name='TOTAL')
         tcd = tcd.round(2)
-        st.dataframe(tcd, use_container_width=True)
+        st.dataframe(tcd, width='stretch')
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : RÈGLES DE CATÉGORIES
@@ -334,7 +334,7 @@ elif page == "🏷️ Règles de catégories":
         with c3: sub = st.text_input("Sous-catégorie")
         with c4: prio = st.number_input("Priorité", 0, 100, 10)
         
-        if st.form_submit_button("Enregistrer", use_container_width=True) and mot and cat:
+        if st.form_submit_button("Enregistrer", width='stretch') and mot and cat:
             supabase.table("regles").upsert({
                 "mot_cle": mot.upper(), "categorie": cat, "sous_categorie": sub, "priorite": prio
             }, on_conflict="mot_cle").execute()
@@ -343,13 +343,13 @@ elif page == "🏷️ Règles de catégories":
             st.rerun()
 
     regles = get_regles()
-    st.dataframe(regles, use_container_width=True)
+    st.dataframe(regles, width='stretch')
 
     st.divider()
     st.subheader("🔄 Appliquer les règles aux données existantes")
     st.info("Ce bouton va scanner toutes les transactions 'À classer' et appliquer vos règles enregistrées.")
 
-    if st.button("Lancer la mise à jour globale", use_container_width=True):
+    if st.button("Lancer la mise à jour globale", width='stretch'):
         regles_df = get_regles()
         df_all = load_transactions()
         
