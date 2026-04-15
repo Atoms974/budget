@@ -169,41 +169,71 @@ if page == "🏠 Tableau de bord":
     if nb_a_classer > 0:
         st.markdown(f'<div class="alert-box" style="margin-top:1rem">⚠️ {nb_a_classer} transactions sont dans "À classer". Allez dans <b>Recatégoriser</b>.</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="section-title">Dépenses par catégorie</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Dépenses par catégorie et sous-catégorie</div>', unsafe_allow_html=True)
 
     df_dep = df[df['montant'] < 0].copy()
     df_dep['montant_abs'] = df_dep['montant'].abs()
+    
+    # ⚠️ Important : On remplace les sous-catégories vides par "Général" pour éviter que Plotly ne plante
+    df_dep['sous_categorie'] = df_dep['sous_categorie'].fillna('Général')
+    df_dep.loc[df_dep['sous_categorie'] == '', 'sous_categorie'] = 'Général'
 
     col_g1, col_g2 = st.columns([1, 1])
 
     with col_g1:
         if not df_dep.empty:
-            by_cat = df_dep.groupby('categorie')['montant_abs'].sum().sort_values(ascending=False).reset_index()
-            fig_pie = px.pie(by_cat, values='montant_abs', names='categorie', hole=0.5, 
-                             color_discrete_sequence=px.colors.qualitative.Pastel) # Couleurs plus douces pour le mode sombre
-            fig_pie.update_layout(
+            # Graphique Sunburst (Le remplaçant du camembert)
+            fig_sun = px.sunburst(
+                df_dep, 
+                path=['categorie', 'sous_categorie'], 
+                values='montant_abs',
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
+            fig_sun.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)', 
                 plot_bgcolor='rgba(0,0,0,0)', 
-                margin=dict(t=20,b=20,l=20,r=20),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2) # Légende en dessous pour gagner de la place
+                margin=dict(t=20,b=20,l=20,r=20)
             )
-            # On utilise le thème streamlit pour que le texte devienne BLANC automatiquement sur fond BLEU
-            st.plotly_chart(fig_pie, on_select="ignore", theme="streamlit") 
+            # Ajout d'une petite astuce pour formater les nombres au survol
+            fig_sun.update_traces(hovertemplate='<b>%{label}</b><br>Montant: %{value:.2f} €<br>Part: %{percentParent:.1%}')
+            st.plotly_chart(fig_sun, use_container_width=True, theme="streamlit") 
 
     with col_g2:
         if not df_dep.empty:
-            # Echelle de couleur 'Viridis' : très lisible sur fond sombre ET clair
-            fig_bar = px.bar(by_cat.head(10), x='montant_abs', y='categorie', orientation='h', 
-                             color='montant_abs', color_continuous_scale='Viridis')
+            # On groupe par catégorie ET sous-catégorie
+            by_cat_sub = df_dep.groupby(['categorie', 'sous_categorie'])['montant_abs'].sum().reset_index()
+            
+            # On garde seulement les 10 plus grosses catégories pour que la lecture reste agréable
+            top_10_cats = df_dep.groupby('categorie')['montant_abs'].sum().nlargest(10).index
+            by_cat_sub = by_cat_sub[by_cat_sub['categorie'].isin(top_10_cats)]
+
+            # Graphique en barres empilées
+            fig_bar = px.bar(
+                by_cat_sub, 
+                x='montant_abs', 
+                y='categorie', 
+                color='sous_categorie', # Découpe la barre selon les sous-catégories
+                orientation='h', 
+                color_discrete_sequence=px.colors.qualitative.Pastel
+            )
             fig_bar.update_layout(
                 paper_bgcolor='rgba(0,0,0,0)', 
                 plot_bgcolor='rgba(0,0,0,0)', 
-                yaxis=dict(autorange='reversed'), 
-                showlegend=False, 
-                coloraxis_showscale=False, 
+                yaxis=dict(categoryorder='total ascending'), # Trie par la barre totale la plus grande
+                showlegend=True, 
+                legend=dict(
+                    orientation="h", 
+                    yanchor="top", 
+                    y=-0.2, 
+                    title_text='' # Enlève le titre "sous_categorie" de la légende
+                ),
                 margin=dict(t=20,b=20,l=20,r=20)
             )
-            st.plotly_chart(fig_bar, on_select="ignore", theme="streamlit")
+            st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
+
+    st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
+
+    # ... (Garde le code de ton graphique d'évolution mensuelle 'fig_line' exactement comme il était) ...
             
     st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
 
