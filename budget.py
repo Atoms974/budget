@@ -91,20 +91,15 @@ html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 
 # ── SIDEBAR NAV ──────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div style="padding: 1rem 0 1.5rem 0;">
-        <div style="font-family:'DM Serif Display',serif; font-size:1.4rem; color:#f1f5f9; margin-bottom:0.2rem;">💳 Budget Cloud</div>
-        <div style="font-size:0.78rem; color:#475569; font-weight:300;">Synchronisé via Supabase</div>
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown("<h2 style='color:white;'>💳 Budget Cloud</h2>", unsafe_allow_html=True)
     page = st.radio("Navigation", [
         "🏠 Tableau de bord",
+        "🔍 Journal des données",
         "📥 Importer CSV",
         "📊 Analyse détaillée",
         "🏷️ Règles de catégories",
         "✏️ Recatégoriser",
-    ], label_visibility="collapsed")
+    ])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : TABLEAU DE BORD
