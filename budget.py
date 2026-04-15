@@ -319,8 +319,7 @@ elif page == "📥 Importer CSV":
                 except: continue
 
                 to_insert.append({
-                    try:
-                        date_obj = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
+                    try:date_obj = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
                         date_str = date_obj.strftime('%Y-%m-%d')
                    except: continue # On saute la ligne si la date est illisible
                     "libelle": lib,
