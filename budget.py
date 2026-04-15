@@ -283,7 +283,7 @@ elif page == "🔍 Journal des données":
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
-elif page == "📥 Import CSV":
+elif page == "📥 Importer CSV":
     st.markdown('<div class="page-title">Importer des transactions</div>', unsafe_allow_html=True)
     compte_nom = st.text_input("Nom du compte (ex: Compte Courant)", "Principal")
     uploaded = st.file_uploader("Choisir un fichier CSV", type="csv")
