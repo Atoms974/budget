@@ -18,8 +18,14 @@ supabase: Client = create_client(URL, KEY)
 # --- LOGIQUE DE DONNÉES ---
 
 def get_regles():
-    res = supabase.table("regles").select("*").order("priorite", desc=True).execute()
-    return pd.DataFrame(res.data)
+    try:
+        res = supabase.table("regles").select("*").order("priorite", desc=True).execute()
+        if not res.data:
+            return pd.DataFrame(columns=['mot_cle', 'categorie', 'sous_categorie', 'priorite'])
+        return pd.DataFrame(res.data)
+    except Exception as e:
+        st.error(f"Erreur règles : {e}")
+        return pd.DataFrame()
 
 def categoriser(libelle, regles_df):
     l = str(libelle).upper()
@@ -29,20 +35,34 @@ def categoriser(libelle, regles_df):
     return "À classer", ""
 
 def load_transactions(comptes=None, annees=None, exclure_cat=None):
-    # On récupère tout (Postgres gère très bien le volume)
-    res = supabase.table("transactions").select("*").execute()
-    df = pd.DataFrame(res.data)
-    
-    if df.empty: return df
-    
-    df['date'] = pd.to_datetime(df['date'])
-    df['annee'] = df['date'].dt.year
-    df['mois_label'] = df['date'].dt.strftime('%Y-%m')
-    
-    if comptes: df = df[df['compte'].isin(comptes)]
-    if annees: df = df[df['annee'].isin(annees)]
-    if exclure_cat: df = df[~df['categorie'].isin(exclure_cat)]
-    return df
+    try:
+        res = supabase.table("transactions").select("*").execute()
+        if not res.data:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(res.data)
+        
+        # --- CORRECTIONS CRITIQUES ---
+        # 1. Convertir les montants (Supabase envoie du texte ou decimal)
+        df['montant'] = pd.to_numeric(df['montant'], errors='coerce')
+        
+        # 2. Convertir les dates proprement
+        df['date'] = pd.to_datetime(df['date'])
+        
+        # 3. Créer les colonnes de temps pour les graphiques
+        df['annee'] = df['date'].dt.year
+        df['mois_num'] = df['date'].dt.month
+        df['mois_label'] = df['date'].dt.strftime('%Y-%m')
+        
+        # Filtres
+        if comptes: df = df[df['compte'].isin(comptes)]
+        if annees: df = df[df['annee'].isin(annees)]
+        if exclure_cat: df = df[~df['categorie'].isin(exclure_cat)]
+        
+        return df
+    except Exception as e:
+        st.error(f"Erreur chargement transactions : {e}")
+        return pd.DataFrame()
 
 # --- INTERFACE (DESIGN) ---
 st.set_page_config(page_title="Mon Budget Cloud", layout="wide", page_icon="☁️")
