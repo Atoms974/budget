@@ -345,6 +345,35 @@ elif page == "🏷️ Règles de catégories":
     regles = get_regles()
     st.dataframe(regles, use_container_width=True)
 
+    st.divider()
+    st.subheader("🔄 Appliquer les règles aux données existantes")
+    st.info("Ce bouton va scanner toutes les transactions 'À classer' et appliquer vos règles enregistrées.")
+
+    if st.button("Lancer la mise à jour globale", use_container_width=True):
+        regles_df = get_regles()
+        df_all = load_transactions()
+        
+        # On filtre uniquement celles qui n'ont pas encore de catégorie
+        a_classer = df_all[(df_all['categorie'] == "À classer") | (df_all['categorie'].isna())]
+        
+        if a_classer.empty:
+            st.success("Toutes les transactions sont déjà catégorisées !")
+        else:
+            count = 0
+            with st.status("Catégorisation en cours...", expanded=True) as status:
+                for _, row in a_classer.iterrows():
+                    new_cat, new_sub = categoriser(row['libelle'], regles_df)
+                    
+                    if new_cat != "À classer":
+                        # Mise à jour dans Supabase
+                        supabase.table("transactions").update({
+                            "categorie": new_cat, 
+                            "sous_categorie": new_sub
+                        }).eq("id", row['id']).execute()
+                        count += 1
+                status.update(label=f"Terminé ! {count} transactions mises à jour.", state="complete")
+            st.rerun()
+
     with st.expander("🗑️ Supprimer une règle"):
         if not regles.empty:
             to_delete = st.selectbox("Règle à supprimer", regles['mot_cle'].tolist())
