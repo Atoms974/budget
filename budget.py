@@ -320,11 +320,9 @@ elif page == "📥 Importer CSV":
 
                 to_insert.append({
                     try:
-    # On force le format jour en premier
-    date_obj = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
-    date_str = date_obj.strftime('%Y-%m-%d')
-except:
-    continue # On saute la ligne si la date est illisible
+                        date_obj = pd.to_datetime(row[col_date], dayfirst=True, errors='coerce')
+                        date_str = date_obj.strftime('%Y-%m-%d')
+                   except: continue # On saute la ligne si la date est illisible
                     "libelle": lib,
                     "montant": mt_float,
                     "compte": compte_nom,
