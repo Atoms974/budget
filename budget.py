@@ -283,7 +283,7 @@ elif page == "🔍 Journal des données":
         st.dataframe(df_filtered[['date', 'compte', 'libelle', 'montant', 'categorie', 'sous_categorie']], 
                      width='stretch', height=600)
         
-        st.download_button("📥 Exporter en CSV", df_filtered.to_csv(index=False)
+        st.download_button("📥 Exporter en CSV", df_filtered.to_csv(index=False), "export_budget.csv", "text/csv")
                            
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
