@@ -181,20 +181,37 @@ if page == "🏠 Tableau de bord":
     df_dep['montant_abs'] = df_dep['montant'].abs()
 
     col_g1, col_g2 = st.columns([1, 1])
+    
+    # -- La couleur de texte forcée pour qu'on puisse lire --
+    text_color = '#0f172a' 
 
     with col_g1:
         if not df_dep.empty:
             by_cat = df_dep.groupby('categorie')['montant_abs'].sum().sort_values(ascending=False).reset_index()
             fig_pie = px.pie(by_cat, values='montant_abs', names='categorie', hole=0.5, color_discrete_sequence=px.colors.qualitative.Set3)
-            fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=10,b=10,l=10,r=10))
-            fig_pie.update_traces(textposition='inside', textinfo='percent')
-            st.plotly_chart(fig_pie, use_container_width=True)
+            fig_pie.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                margin=dict(t=10,b=10,l=10,r=10),
+                font=dict(color=text_color) # <-- Fix de la couleur
+            )
+            # theme=None bloque le thème par défaut de Streamlit
+            st.plotly_chart(fig_pie, use_container_width=True, theme=None) 
 
     with col_g2:
         if not df_dep.empty:
-            fig_bar = px.bar(by_cat.head(10), x='montant_abs', y='categorie', orientation='h', color='montant_abs', color_continuous_scale='Blues')
-            fig_bar.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(autorange='reversed'), showlegend=False, coloraxis_showscale=False, margin=dict(t=10,b=10,l=10,r=10))
-            st.plotly_chart(fig_bar, use_container_width=True)
+            # J'ai remplacé 'Blues' par 'Teal' pour le dégradé, ça évite l'overdose de bleu
+            fig_bar = px.bar(by_cat.head(10), x='montant_abs', y='categorie', orientation='h', color='montant_abs', color_continuous_scale='Teal')
+            fig_bar.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)', 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                yaxis=dict(autorange='reversed'), 
+                showlegend=False, 
+                coloraxis_showscale=False, 
+                margin=dict(t=10,b=10,l=10,r=10),
+                font=dict(color=text_color) # <-- Fix de la couleur
+            )
+            st.plotly_chart(fig_bar, use_container_width=True, theme=None)
 
     st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
 
@@ -206,9 +223,14 @@ if page == "🏠 Tableau de bord":
     fig_line = go.Figure()
     fig_line.add_trace(go.Bar(x=monthly['mois_label'], y=monthly['revenus'], name='Revenus', marker_color='#10b981', opacity=0.8))
     fig_line.add_trace(go.Bar(x=monthly['mois_label'], y=monthly['depenses'].abs(), name='Dépenses', marker_color='#ef4444', opacity=0.8))
-    fig_line.update_layout(barmode='group', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=30,b=10,l=10,r=10))
-    st.plotly_chart(fig_line, use_container_width=True)
-
+    fig_line.update_layout(
+        barmode='group', 
+        paper_bgcolor='rgba(0,0,0,0)', 
+        plot_bgcolor='rgba(0,0,0,0)', 
+        margin=dict(t=30,b=10,l=10,r=10),
+        font=dict(color=text_color) # <-- Fix de la couleur
+    )
+    st.plotly_chart(fig_line, use_container_width=True, theme=None)
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
