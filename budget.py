@@ -304,10 +304,13 @@ elif page == "📥 Importer CSV":
             to_insert = []
             for _, row in df_raw.iterrows():
                 try:
-                    # FIX DATE : On force le jour en premier pour éviter l'erreur de Janvier
-                    dt = pd.to_datetime(row[col_d], dayfirst=True)
-                    # FIX MONTANT : On nettoie les espaces et virgules
-                    mt = float(str(row[col_m]).replace(',','.').replace(' ',''))
+                    raw_date = str(row[col_d])
+                    dfirst = False if "-" in raw_date else True
+                    dt = pd.to_datetime(raw_date, dayfirst=dfirst, errors='coerce')
+                    
+                    # Nettoyage montant
+                    m_raw = str(row[col_m]).replace(',','.').replace(' ','').replace('\xa0','')
+                    mt = float(m_raw)
                     cat, sub = categoriser(row[col_l], regles)
                     
                     to_insert.append({
