@@ -304,26 +304,17 @@ elif page == "📥 Importer CSV":
             to_insert = []
             for _, row in df_raw.iterrows():
                 try:
-                   regles = get_regles()
-            to_insert = []
-            for _, row in df_raw.iterrows():
-                try:
-                    # FIX DATE : On utilise format='mixed' ou on gère l'ambiguïté intelligemment
-                    raw_date = str(row[col_d])
-                    # Si la date contient des tirets, c'est probablement ISO, sinon c'est FR
-                    day_first = False if '-' in raw_date else True
-                    dt = pd.to_datetime(raw_date, dayfirst=day_first, errors='coerce')
-                    
+                    # FIX DATE : On force le jour en premier pour éviter l'erreur de Janvier
+                    dt = pd.to_datetime(row[col_d], dayfirst=True)
+                    # FIX MONTANT : On nettoie les espaces et virgules
                     mt = float(str(row[col_m]).replace(',','.').replace(' ',''))
-                    cat, sub, subsub = categoriser(row[col_l], regles)
+                    cat, sub = categoriser(row[col_l], regles)
                     
-                    if pd.notna(dt):
-                        to_insert.append({
-                            "date": dt.strftime('%Y-%m-%d'), "libelle": row[col_l],
-                            "montant": mt, "compte": compte_nom, 
-                            "categorie": cat, "sous_categorie": sub
-                        })
-                  except: continue
+                    to_insert.append({
+                        "date": dt.strftime('%Y-%m-%d'), "libelle": row[col_l],
+                        "montant": mt, "compte": compte_nom, "categorie": cat, "sous_categorie": sub
+                    })
+                except: continue
             
             if to_insert:
                 supabase.table("transactions").upsert(to_insert, on_conflict="date,libelle,montant,compte").execute()
