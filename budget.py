@@ -323,7 +323,7 @@ elif page == "📥 Importer CSV":
                             "montant": mt, "compte": compte_nom, 
                             "categorie": cat, "sous_categorie": sub
                         })
-          except: continue
+                  except: continue
             
             if to_insert:
                 supabase.table("transactions").upsert(to_insert, on_conflict="date,libelle,montant,compte").execute()
