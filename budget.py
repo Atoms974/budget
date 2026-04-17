@@ -341,7 +341,7 @@ elif page == "📊 Analyse détaillée":
         st.info("Aucune donnée.")
         st.stop()
 
-    # 1. Filtres globaux (Comptes, Années, Mois, Type)
+    # 1. Filtres globaux
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         comptes_dispo = sorted(df_all['compte'].dropna().unique().tolist())
@@ -355,11 +355,18 @@ elif page == "📊 Analyse détaillée":
     with c4:
         type_sel = st.radio("Type", ["Dépenses", "Revenus", "Tout"], horizontal=True)
 
-    # Application du premier niveau de filtres (pour que les catégories s'adaptent)
+    # --- NOUVEAU : Option pour masquer les virements ---
+    exclure_virements_ana = st.checkbox("Masquer les virements internes", value=True, key="chk_ana")
+
+    # Application du premier niveau de filtres
     df_filtre = df_all.copy()
     if compte_sel: df_filtre = df_filtre[df_filtre['compte'].isin(compte_sel)]
     if annee_sel: df_filtre = df_filtre[df_filtre['annee'].isin(annee_sel)]
     if mois_sel: df_filtre = df_filtre[df_filtre['mois_label'].isin(mois_sel)]
+    
+    # Masquage dynamique de la catégorie "Virement interne"
+    if exclure_virements_ana:
+        df_filtre = df_filtre[df_filtre['categorie'] != "Virement interne"]
 
     # 2. Filtres dynamiques (Catégories et Sous-catégories)
     f1, f2 = st.columns(2)
