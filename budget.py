@@ -279,7 +279,7 @@ elif page == "🔍 Journal des données":
                      width='stretch', height=600)
         
         st.download_button("📥 Exporter en CSV", df_filtered.to_csv(index=False), "export_budget.csv", "text/csv")
-                           
+                            
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGE : IMPORTER CSV
 # ══════════════════════════════════════════════════════════════════════════════
@@ -331,7 +331,7 @@ elif page == "📥 Importer CSV":
         st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE : ANALYSE DÉTAILLÉE
+# PAGE : ANALYSE DÉTAILLÉE (MISE À JOUR)
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📊 Analyse détaillée":
     st.markdown('<div class="page-title">Analyse détaillée</div>', unsafe_allow_html=True)
@@ -341,31 +341,73 @@ elif page == "📊 Analyse détaillée":
         st.info("Aucune donnée.")
         st.stop()
 
-    c1, c2, c3 = st.columns(3)
+    # 1. Filtres globaux (Comptes, Années, Mois, Type)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        annees_dispo = sorted(df_all['annee'].unique(), reverse=True)
-        annee_sel = st.multiselect("Années", annees_dispo, default=[annees_dispo[0]])
+        comptes_dispo = sorted(df_all['compte'].dropna().unique().tolist())
+        compte_sel = st.multiselect("Comptes", comptes_dispo, default=comptes_dispo)
     with c2:
-        # --- AJOUT DU FILTRE PAR MOIS ---
-        mois_dispo = sorted(df_all[df_all['annee'].isin(annee_sel)]['mois_label'].unique()) if annee_sel else []
-        mois_sel = st.multiselect("Mois spécifiques", mois_dispo)
+        annees_dispo = sorted(df_all['annee'].dropna().unique(), reverse=True)
+        annee_sel = st.multiselect("Années", annees_dispo, default=[annees_dispo[0]] if annees_dispo else [])
     with c3:
+        mois_dispo = sorted(df_all[df_all['annee'].isin(annee_sel)]['mois_label'].dropna().unique()) if annee_sel else []
+        mois_sel = st.multiselect("Mois spécifiques", mois_dispo)
+    with c4:
         type_sel = st.radio("Type", ["Dépenses", "Revenus", "Tout"], horizontal=True)
 
-    df = df_all.copy()
-    if annee_sel: df = df[df['annee'].isin(annee_sel)]
-    if mois_sel: df = df[df['mois_label'].isin(mois_sel)]
-    
-    if type_sel == "Dépenses":
-        df = df[df['montant'] < 0]
-        df['montant'] = df['montant'].abs()
-    elif type_sel == "Revenus":
-        df = df[df['montant'] > 0]
+    # Application du premier niveau de filtres (pour que les catégories s'adaptent)
+    df_filtre = df_all.copy()
+    if compte_sel: df_filtre = df_filtre[df_filtre['compte'].isin(compte_sel)]
+    if annee_sel: df_filtre = df_filtre[df_filtre['annee'].isin(annee_sel)]
+    if mois_sel: df_filtre = df_filtre[df_filtre['mois_label'].isin(mois_sel)]
 
-    st.markdown('<div class="section-title">Tableau croisé par mois</div>', unsafe_allow_html=True)
-    if not df.empty:
-        tcd = df.pivot_table(index=['categorie', 'sous_categorie'], columns='mois_label', values='montant', aggfunc='sum', fill_value=0)
-        st.dataframe(tcd, width='stretch')
+    # 2. Filtres dynamiques (Catégories et Sous-catégories)
+    f1, f2 = st.columns(2)
+    with f1:
+        cats_dispo = sorted(df_filtre['categorie'].dropna().unique())
+        cats_sel = st.multiselect("Filtrer par catégories", cats_dispo)
+        if cats_sel:
+            df_filtre = df_filtre[df_filtre['categorie'].isin(cats_sel)]
+    with f2:
+        subs_dispo = sorted(df_filtre['sous_categorie'].dropna().unique())
+        subs_sel = st.multiselect("Filtrer par sous-catégories", subs_dispo)
+        if subs_sel:
+            df_filtre = df_filtre[df_filtre['sous_categorie'].isin(subs_sel)]
+
+    # 3. Application du filtre "Type" sur les montants
+    if type_sel == "Dépenses":
+        df_table = df_filtre[df_filtre['montant'] < 0].copy()
+        df_table['montant'] = df_table['montant'].abs()
+    elif type_sel == "Revenus":
+        df_table = df_filtre[df_filtre['montant'] > 0].copy()
+    else:
+        df_table = df_filtre.copy()
+
+    # 4. Affichage des données
+    st.markdown('<div class="section-title">Tableau croisé détaillé</div>', unsafe_allow_html=True)
+    if not df_table.empty:
+        # Création du tableau croisé
+        tcd = df_table.pivot_table(
+            index=['categorie', 'sous_categorie'], 
+            columns='mois_label', 
+            values='montant', 
+            aggfunc='sum', 
+            fill_value=0
+        )
+        
+        # Ajout du Total par ligne
+        tcd['TOTAL'] = tcd.sum(axis=1)
+        
+        # Style conditionnel selon Dépenses ou Revenus
+        color_max = "#2e0101" if type_sel == "Dépenses" else ("#012e01" if type_sel == "Revenus" else "#333333")
+        st.dataframe(tcd.style.format("{:.2f} €").highlight_max(axis=0, color=color_max), use_container_width=True)
+        
+        # Résumé par catégorie principale
+        st.markdown('### Récapitulatif global par catégorie')
+        cat_total = df_table.groupby('categorie')['montant'].sum().reset_index()
+        cat_total = cat_total.rename(columns={'montant': 'Total (€)'}).sort_values('Total (€)', ascending=False)
+        st.dataframe(cat_total.style.format({"Total (€)": "{:.2f} €"}), use_container_width=True)
+        
     else:
         st.warning("Aucune donnée pour cette sélection.")
 
