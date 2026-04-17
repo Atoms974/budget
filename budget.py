@@ -127,7 +127,7 @@ if page == "🏠 Tableau de bord":
     df = load_transactions(
         comptes=None if compte_sel == "Tous" else [compte_sel],
         annees=[annee_sel],
-        exclure_cat=["Banque"] if exclure_virements else None
+        exclure_cat=["Virement interne"] if exclure_virements else None
     )
 
     depenses = df[df['montant'] < 0]['montant'].sum()
