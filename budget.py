@@ -440,37 +440,44 @@ elif page == "🏷️ Règles de catégories":
     subs_dispo = sorted(set(subs_utilisees))
 
     # 2. Le formulaire avec menus déroulants ET possibilité de créer une nouvelle valeur
-    with st.form("add_rule"):
-        c1, c2, c3, c4 = st.columns([3,2,2,1])
+   # 2. Le formulaire avec menus déroulants ET possibilité de créer une nouvelle valeur
+    with st.form("add_rule_form"):
+        c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
         
         with c1: 
-            mot = st.text_input("Si le libellé contient")
+            mot = st.text_input("Si le libellé contient", key="rule_keyword")
             
         with c2: 
-            cat_sel = st.selectbox("Catégorie", ["Sélectionner..."] + cats_dispo + ["✏️ NOUVELLE CATÉGORIE"])
-            cat_new = st.text_input("Nom si nouvelle", placeholder="Saisir ici...", label_visibility="collapsed")
+            cat_sel = st.selectbox("Catégorie", ["Sélectionner..."] + cats_dispo + ["✏️ NOUVELLE CATÉGORIE"], key="sel_cat")
+            cat_new = st.text_input("Nom cat.", placeholder="Nouvelle catégorie...", label_visibility="collapsed", key="input_new_cat")
             
         with c3: 
-            sub_sel = st.selectbox("Sous-catégorie", ["(Aucune)"] + subs_dispo + ["✏️ NOUVELLE SOUS-CAT."])
-            sub_new = st.text_input("Nom si nouvelle", placeholder="Saisir ici...", label_visibility="collapsed")
+            sub_sel = st.selectbox("Sous-catégorie", ["(Aucune)"] + subs_dispo + ["✏️ NOUVELLE SOUS-CAT."], key="sel_sub")
+            sub_new = st.text_input("Nom sous-cat.", placeholder="Nouvelle sous-cat...", label_visibility="collapsed", key="input_new_sub")
             
         with c4: 
-            prio = st.number_input("Priorité", 0, 100, 10)
+            prio = st.number_input("Priorité", 0, 100, 10, key="rule_prio")
         
-        if st.form_submit_button("Enregistrer", width='stretch'):
-            # Logique pour savoir si on prend la valeur du menu déroulant ou la nouvelle saisie
+        # Le bouton doit être bien aligné dans le bloc "with st.form"
+        submit_button = st.form_submit_button("Enregistrer la règle", width='stretch')
+
+        if submit_button:
+            # Logique pour décider quelle valeur enregistrer
             final_cat = cat_new.strip() if cat_sel == "✏️ NOUVELLE CATÉGORIE" else (cat_sel if cat_sel != "Sélectionner..." else "")
             final_sub = sub_new.strip() if sub_sel == "✏️ NOUVELLE SOUS-CAT." else (sub_sel if sub_sel != "(Aucune)" else "")
             
             if mot and final_cat:
                 supabase.table("regles").upsert({
-                    "mot_cle": mot.upper(), "categorie": final_cat, "sous_categorie": final_sub, "priorite": prio
+                    "mot_cle": mot.upper(), 
+                    "categorie": final_cat, 
+                    "sous_categorie": final_sub, 
+                    "priorite": prio
                 }, on_conflict="mot_cle").execute()
                 
-                st.success("✅ Règle enregistrée !")
+                st.success(f"✅ Règle enregistrée : {mot.upper()} -> {final_cat}")
                 st.rerun()
             else:
-                st.error("⚠️ Veuillez renseigner au moins le mot-clé et la catégorie.")
+                st.error("⚠️ Il manque le mot-clé ou la catégorie.")
 
     # Affichage du tableau des règles existantes
     regles = get_regles()
