@@ -424,21 +424,55 @@ elif page == "📊 Analyse détaillée":
 elif page == "🏷️ Règles de catégories":
     st.markdown('<div class="page-title">Règles de catégories</div>', unsafe_allow_html=True)
     
+    # 1. On récupère toutes les données existantes pour alimenter les listes déroulantes
+    df_all = load_transactions()
+    
+    # On crée la liste des catégories uniques + quelques valeurs par défaut incontournables
+    cats_base = ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Virement interne", "Épargne"]
+    if not df_all.empty:
+        cats_utilisees = [c for c in df_all['categorie'].dropna().unique() if c != "À classer"]
+        subs_utilisees = [s for s in df_all['sous_categorie'].dropna().unique() if str(s).strip() != ""]
+    else:
+        cats_utilisees = []
+        subs_utilisees = []
+        
+    cats_dispo = sorted(set(cats_base + cats_utilisees))
+    subs_dispo = sorted(set(subs_utilisees))
+
+    # 2. Le formulaire avec menus déroulants ET possibilité de créer une nouvelle valeur
     with st.form("add_rule"):
         c1, c2, c3, c4 = st.columns([3,2,2,1])
-        with c1: mot = st.text_input("Si le libellé contient")
-        with c2: cat = st.text_input("Catégorie")
-        with c3: sub = st.text_input("Sous-catégorie")
-        with c4: prio = st.number_input("Priorité", 0, 100, 10)
         
-        if st.form_submit_button("Enregistrer", width='stretch') and mot and cat:
-            supabase.table("regles").upsert({
-                "mot_cle": mot.upper(), "categorie": cat, "sous_categorie": sub, "priorite": prio
-            }, on_conflict="mot_cle").execute()
+        with c1: 
+            mot = st.text_input("Si le libellé contient")
             
-            st.success("✅ Règle enregistrée !")
-            st.rerun()
+        with c2: 
+            cat_sel = st.selectbox("Catégorie", ["Sélectionner..."] + cats_dispo + ["✏️ NOUVELLE CATÉGORIE"])
+            cat_new = st.text_input("Nom si nouvelle", placeholder="Saisir ici...", label_visibility="collapsed")
+            
+        with c3: 
+            sub_sel = st.selectbox("Sous-catégorie", ["(Aucune)"] + subs_dispo + ["✏️ NOUVELLE SOUS-CAT."])
+            sub_new = st.text_input("Nom si nouvelle", placeholder="Saisir ici...", label_visibility="collapsed")
+            
+        with c4: 
+            prio = st.number_input("Priorité", 0, 100, 10)
+        
+        if st.form_submit_button("Enregistrer", width='stretch'):
+            # Logique pour savoir si on prend la valeur du menu déroulant ou la nouvelle saisie
+            final_cat = cat_new.strip() if cat_sel == "✏️ NOUVELLE CATÉGORIE" else (cat_sel if cat_sel != "Sélectionner..." else "")
+            final_sub = sub_new.strip() if sub_sel == "✏️ NOUVELLE SOUS-CAT." else (sub_sel if sub_sel != "(Aucune)" else "")
+            
+            if mot and final_cat:
+                supabase.table("regles").upsert({
+                    "mot_cle": mot.upper(), "categorie": final_cat, "sous_categorie": final_sub, "priorite": prio
+                }, on_conflict="mot_cle").execute()
+                
+                st.success("✅ Règle enregistrée !")
+                st.rerun()
+            else:
+                st.error("⚠️ Veuillez renseigner au moins le mot-clé et la catégorie.")
 
+    # Affichage du tableau des règles existantes
     regles = get_regles()
     st.dataframe(regles, width='stretch')
 
