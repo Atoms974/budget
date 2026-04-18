@@ -444,30 +444,34 @@ elif page == "🏷️ Règles de catégories":
 
     st.divider()
     st.subheader("🔄 Appliquer les règles aux données existantes")
-    st.info("Ce bouton va scanner toutes les transactions 'À classer' et appliquer vos règles enregistrées.")
+    st.info("Ce bouton va scanner TOUTES les transactions (classées et à classer) et appliquer vos règles enregistrées. Attention : cela écrasera les catégories manuelles si une règle correspond au libellé.")
 
     if st.button("Lancer la mise à jour globale", width='stretch'):
         regles_df = get_regles()
         df_all = load_transactions()
         
-        # On filtre uniquement celles qui n'ont pas encore de catégorie
-        a_classer = df_all[(df_all['categorie'] == "À classer") | (df_all['categorie'].isna())]
-        
-        if a_classer.empty:
-            st.success("Toutes les transactions sont déjà catégorisées !")
+        if df_all.empty:
+            st.warning("Aucune transaction à analyser.")
         else:
             count = 0
-            with st.status("Catégorisation en cours...", expanded=True) as status:
-                for _, row in a_classer.iterrows():
+            with st.status("Analyse et catégorisation en cours...", expanded=True) as status:
+                for _, row in df_all.iterrows():
                     new_cat, new_sub = categoriser(row['libelle'], regles_df)
                     
+                    # On applique la règle SI elle a trouvé une correspondance
                     if new_cat != "À classer":
-                        # Mise à jour dans Supabase
-                        supabase.table("transactions").update({
-                            "categorie": new_cat, 
-                            "sous_categorie": new_sub
-                        }).eq("id", row['id']).execute()
-                        count += 1
+                        # Optimisation : on ne met à jour Supabase que si ça a vraiment changé
+                        # (évite de faire 500 requêtes inutiles si les lignes sont déjà bonnes)
+                        cat_actuelle = row['categorie'] if pd.notna(row['categorie']) else ""
+                        sub_actuelle = row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie', '')) else ""
+                        
+                        if cat_actuelle != new_cat or sub_actuelle != new_sub:
+                            supabase.table("transactions").update({
+                                "categorie": new_cat, 
+                                "sous_categorie": new_sub
+                            }).eq("id", row['id']).execute()
+                            count += 1
+                            
                 status.update(label=f"Terminé ! {count} transactions mises à jour.", state="complete")
             st.rerun()
 
