@@ -61,6 +61,92 @@ def load_transactions(comptes=None, annees=None, exclure_cat=None):
         st.error(f"Erreur chargement transactions : {e}")
         return pd.DataFrame()
 
+# ── NOUVELLES FONCTIONS D'ANALYSE (Sankey & Heatmap) ─────────────────────────
+def afficher_sankey(df_filtre):
+    st.markdown('<div class="section-title">🌊 Flux de trésorerie</div>', unsafe_allow_html=True)
+    
+    total_revenus = df_filtre[df_filtre['montant'] > 0]['montant'].sum()
+    df_dep = df_filtre[df_filtre['montant'] < 0].groupby('categorie')['montant'].sum().abs().reset_index()
+    
+    if total_revenus == 0 or df_dep.empty:
+        st.info("Données insuffisantes pour générer le flux (nécessite revenus et dépenses).")
+        return
+
+    # On groupe les petites catégories (< 2% du total) pour la lisibilité
+    total_depenses = df_dep['montant'].sum()
+    df_dep['proportion'] = df_dep['montant'] / total_depenses
+    
+    df_principales = df_dep[df_dep['proportion'] >= 0.02]
+    df_autres = df_dep[df_dep['proportion'] < 0.02]
+    
+    if not df_autres.empty:
+        autres_sum = df_autres['montant'].sum()
+        df_principales = pd.concat([df_principales, pd.DataFrame([{'categorie': 'Autres Dépenses', 'montant': autres_sum}])], ignore_index=True)
+
+    reste = max(0, total_revenus - total_depenses)
+
+    labels = ["Revenus"] + df_principales['categorie'].tolist()
+    if reste > 0:
+        labels.append("Épargne / Restant")
+    
+    sources = []
+    targets = []
+    values = []
+    
+    for i, row in df_principales.iterrows():
+        sources.append(0)
+        targets.append(i + 1)
+        values.append(row['montant'])
+        
+    if reste > 0:
+        sources.append(0)
+        targets.append(len(labels) - 1)
+        values.append(reste)
+
+    fig = go.Figure(data=[go.Sankey(
+        node = dict(
+          pad = 15, thickness = 20,
+          line = dict(color = "black", width = 0.5),
+          label = labels,
+          color = "#4c78a8"
+        ),
+        link = dict(
+          source = sources, target = targets, value = values,
+          color = "rgba(169, 172, 182, 0.4)"
+      ))])
+    fig.update_layout(margin=dict(t=20,b=20,l=20,r=20), font_size=12, height=400)
+    st.plotly_chart(fig, use_container_width=True)
+
+def afficher_heatmap(df_filtre):
+    st.markdown('<div class="section-title">📅 Intensité par jour</div>', unsafe_allow_html=True)
+    
+    df_heat = df_filtre[df_filtre['montant'] < 0].copy()
+    if df_heat.empty:
+        st.info("Aucune dépense à afficher.")
+        return
+
+    jours_ordre = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
+    df_heat['jour_semaine'] = df_heat['date'].dt.day_name().replace({
+        'Monday': 'Lundi', 'Tuesday': 'Mardi', 'Wednesday': 'Mercredi', 
+        'Thursday': 'Jeudi', 'Friday': 'Vendredi', 'Saturday': 'Samedi', 'Sunday': 'Dimanche'
+    })
+    
+    heatmap_data = df_heat.groupby(['mois_label', 'jour_semaine'])['montant'].sum().abs().reset_index()
+    heatmap_pivot = heatmap_data.pivot(index='jour_semaine', columns='mois_label', values='montant').fillna(0)
+    
+    # S'assurer que tous les jours de la semaine sont présents dans le bon ordre
+    heatmap_pivot = heatmap_pivot.reindex(jours_ordre).fillna(0)
+
+    fig = px.imshow(
+        heatmap_pivot,
+        labels=dict(x="Mois", y="Jour", color="Dépenses (€)"),
+        color_continuous_scale='Reds',
+        aspect="auto"
+    )
+    fig.update_xaxes(side="top")
+    fig.update_layout(margin=dict(t=20,b=20,l=20,r=20), height=400)
+    st.plotly_chart(fig, use_container_width=True)
+
 # ── STYLES ET INTERFACE ──────────────────────────────────────────────────────
 st.set_page_config(page_title="Budget Cloud", layout="wide", page_icon="💳")
 
@@ -69,21 +155,10 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
-
-/* On enlève les couleurs de fond forcées pour laisser le mode sombre de Streamlit agir */
 .main { padding: 2rem; }
-
-/* Titres qui s'adaptent au thème */
 .page-title { font-family: 'DM Serif Display', serif; font-size: 2.4rem; margin-bottom: 0.2rem; }
 .section-title { font-family: 'DM Serif Display', serif; font-size: 1.3rem; margin: 1.5rem 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(128,128,128,0.2); }
-
-/* Cartes KPI transparentes avec bordure légère pour le mode sombre */
-.kpi-card { 
-    background: rgba(255, 255, 255, 0.05); 
-    border-radius: 16px; 
-    padding: 1.4rem; 
-    border: 1px solid rgba(128,128,128,0.2); 
-}
+.kpi-card { background: rgba(255, 255, 255, 0.05); border-radius: 16px; padding: 1.4rem; border: 1px solid rgba(128,128,128,0.2); }
 .kpi-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: #94a3b8; }
 .kpi-value { font-family: 'DM Serif Display', serif; font-size: 1.8rem; }
 </style>
@@ -113,8 +188,8 @@ if page == "🏠 Tableau de bord":
         st.info("Aucune donnée. Commencez par importer un CSV.")
         st.stop()
 
-    # Filters
-    col1, col2, col3 = st.columns([2,2,3])
+    # Nouveaux filtres inclus (Mois + Catégories optionnelles)
+    col1, col2, col3 = st.columns([1,1,2])
     with col1:
         annees_dispo = sorted(df_all['annee'].unique(), reverse=True)
         annee_sel = st.selectbox("Année", annees_dispo)
@@ -123,29 +198,42 @@ if page == "🏠 Tableau de bord":
         compte_sel = st.selectbox("Compte", comptes_dispo)
     with col3:
         exclure_virements = st.checkbox("Masquer les virements internes", value=True)
+        
+    c4, c5 = st.columns(2)
+    with c4:
+        mois_dispo = sorted(df_all[df_all['annee'] == annee_sel]['mois_label'].unique())
+        mois_sel = st.multiselect("Mois (Optionnel)", mois_dispo)
+    with c5:
+        cats_dispo = sorted(df_all['categorie'].dropna().unique())
+        cat_sel = st.multiselect("Catégorie (Optionnel)", cats_dispo)
 
     df = load_transactions(
         comptes=None if compte_sel == "Tous" else [compte_sel],
         annees=[annee_sel],
         exclure_cat=["Virement interne"] if exclure_virements else None
     )
+    
+    # Application des filtres optionnels sur les données affichées
+    if mois_sel:
+        df = df[df['mois_label'].isin(mois_sel)]
+    if cat_sel:
+        df = df[df['categorie'].isin(cat_sel)]
 
     depenses = df[df['montant'] < 0]['montant'].sum()
     revenus  = df[df['montant'] > 0]['montant'].sum()
     solde    = revenus + depenses
-    # Fix : On compte aussi les valeurs nulles
     nb_a_classer = len(df[(df['categorie'] == "À classer") | (df['categorie'].isna())])
 
     # KPIs
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f"""<div class="kpi-card">
-            <div class="kpi-label">Dépenses {annee_sel}</div>
+            <div class="kpi-label">Dépenses filtrées</div>
             <div class="kpi-value neg">{depenses:,.0f} €</div>
         </div>""", unsafe_allow_html=True)
     with k2:
         st.markdown(f"""<div class="kpi-card">
-            <div class="kpi-label">Revenus {annee_sel}</div>
+            <div class="kpi-label">Revenus filtrés</div>
             <div class="kpi-value pos">+{revenus:,.0f} €</div>
         </div>""", unsafe_allow_html=True)
     with k3:
@@ -169,7 +257,6 @@ if page == "🏠 Tableau de bord":
     df_dep = df[df['montant'] < 0].copy()
     df_dep['montant_abs'] = df_dep['montant'].abs()
     
-    # ⚠️ Important : On remplace les sous-catégories vides par "Général" pour éviter que Plotly ne plante
     df_dep['sous_categorie'] = df_dep['sous_categorie'].fillna('Général')
     df_dep.loc[df_dep['sous_categorie'] == '', 'sous_categorie'] = 'Général'
 
@@ -177,56 +264,32 @@ if page == "🏠 Tableau de bord":
 
     with col_g1:
         if not df_dep.empty:
-            # Graphique Sunburst (Le remplaçant du camembert)
             fig_sun = px.sunburst(
-                df_dep, 
-                path=['categorie', 'sous_categorie'], 
-                values='montant_abs',
+                df_dep, path=['categorie', 'sous_categorie'], values='montant_abs',
                 color_discrete_sequence=px.colors.qualitative.Pastel
             )
-            fig_sun.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', 
-                plot_bgcolor='rgba(0,0,0,0)', 
-                margin=dict(t=20,b=20,l=20,r=20)
-            )
-            # Ajout d'une petite astuce pour formater les nombres au survol
+            fig_sun.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20,b=20,l=20,r=20))
             fig_sun.update_traces(hovertemplate='<b>%{label}</b><br>Montant: %{value:.2f} €<br>Part: %{percentParent:.1%}')
             st.plotly_chart(fig_sun, width='stretch', theme="streamlit") 
 
     with col_g2:
         if not df_dep.empty:
-            # On groupe par catégorie ET sous-catégorie
             by_cat_sub = df_dep.groupby(['categorie', 'sous_categorie'])['montant_abs'].sum().reset_index()
-            
-            # On garde seulement les 10 plus grosses catégories pour que la lecture reste agréable
             top_10_cats = df_dep.groupby('categorie')['montant_abs'].sum().nlargest(10).index
             by_cat_sub = by_cat_sub[by_cat_sub['categorie'].isin(top_10_cats)]
 
-            # Graphique en barres empilées
             fig_bar = px.bar(
-                by_cat_sub, 
-                x='montant_abs', 
-                y='categorie', 
-                color='sous_categorie', # Découpe la barre selon les sous-catégories
-                orientation='h', 
-                color_discrete_sequence=px.colors.qualitative.Pastel
+                by_cat_sub, x='montant_abs', y='categorie', color='sous_categorie', 
+                orientation='h', color_discrete_sequence=px.colors.qualitative.Pastel
             )
             fig_bar.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)', 
-                plot_bgcolor='rgba(0,0,0,0)', 
-                yaxis=dict(categoryorder='total ascending'), # Trie par la barre totale la plus grande
-                showlegend=True, 
-                legend=dict(
-                    orientation="h", 
-                    yanchor="top", 
-                    y=-0.2, 
-                    title_text='' # Enlève le titre "sous_categorie" de la légende
-                ),
+                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', yaxis=dict(categoryorder='total ascending'), 
+                showlegend=True, legend=dict(orientation="h", yanchor="top", y=-0.2, title_text=''),
                 margin=dict(t=20,b=20,l=20,r=20)
             )
             st.plotly_chart(fig_bar, width='stretch', theme="streamlit")
             
-    st.markdown('<div class="section-title">Évolution mensuelle</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Évolution mensuelle globale</div>', unsafe_allow_html=True)
 
     monthly = df.groupby('mois_label').agg(
         depenses=('montant', lambda x: x[x<0].sum()),
@@ -234,20 +297,16 @@ if page == "🏠 Tableau de bord":
     ).reset_index().sort_values('mois_label')
 
     fig_line = go.Figure()
-    # Couleurs vives pour bien ressortir sur le bleu foncé
     fig_line.add_trace(go.Bar(x=monthly['mois_label'], y=monthly['revenus'], name='Revenus', marker_color='#00eb93'))
     fig_line.add_trace(go.Bar(x=monthly['mois_label'], y=monthly['depenses'].abs(), name='Dépenses', marker_color='#ff4b4b'))
     fig_line.update_layout(
-        barmode='group', 
-        paper_bgcolor='rgba(0,0,0,0)', 
-        plot_bgcolor='rgba(0,0,0,0)', 
-        margin=dict(t=30,b=20,l=20,r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        barmode='group', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
+        margin=dict(t=30,b=20,l=20,r=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     st.plotly_chart(fig_line, on_select="ignore", theme="streamlit")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# PAGE : JOURNAL DES DONNÉES (NOUVEAU)
+# PAGE : JOURNAL DES DONNÉES
 # ──────────────────────────────────────────────────────────────────────────────
 elif page == "🔍 Journal des données":
     st.markdown('<div class="page-title">Journal des transactions</div>', unsafe_allow_html=True)
@@ -258,26 +317,18 @@ elif page == "🔍 Journal des données":
     if df.empty:
         st.info("La base de données est vide.")
     else:
-        # Filtres de recherche
         c1, c2, c3 = st.columns([2, 2, 2])
-        with c1:
-            search = st.text_input("🔍 Rechercher un libellé", "")
-        with c2:
-            compte_f = st.multiselect("Compte", df['compte'].unique())
-        with c3:
-            cat_f = st.multiselect("Catégorie", df['categorie'].unique())
+        with c1: search = st.text_input("🔍 Rechercher un libellé", "")
+        with c2: compte_f = st.multiselect("Compte", df['compte'].unique())
+        with c3: cat_f = st.multiselect("Catégorie", df['categorie'].unique())
 
         df_filtered = df.copy()
-        if search:
-            df_filtered = df_filtered[df_filtered['libelle'].str.contains(search, case=False, na=False)]
-        if compte_f:
-            df_filtered = df_filtered[df_filtered['compte'].isin(compte_f)]
-        if cat_f:
-            df_filtered = df_filtered[df_filtered['categorie'].isin(cat_f)]
+        if search: df_filtered = df_filtered[df_filtered['libelle'].str.contains(search, case=False, na=False)]
+        if compte_f: df_filtered = df_filtered[df_filtered['compte'].isin(compte_f)]
+        if cat_f: df_filtered = df_filtered[df_filtered['categorie'].isin(cat_f)]
 
         st.dataframe(df_filtered[['date', 'compte', 'libelle', 'montant', 'categorie', 'sous_categorie']], 
                      width='stretch', height=600)
-        
         st.download_button("📥 Exporter en CSV", df_filtered.to_csv(index=False), "export_budget.csv", "text/csv")
                             
 # ══════════════════════════════════════════════════════════════════════════════
@@ -308,7 +359,6 @@ elif page == "📥 Importer CSV":
                     dfirst = False if "-" in raw_date else True
                     dt = pd.to_datetime(raw_date, dayfirst=dfirst, errors='coerce')
                     
-                    # Nettoyage montant
                     m_raw = str(row[col_m]).replace(',','.').replace(' ','').replace('\xa0','')
                     mt = float(m_raw)
                     cat, sub = categoriser(row[col_l], regles)
@@ -331,7 +381,7 @@ elif page == "📥 Importer CSV":
         st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PAGE : ANALYSE DÉTAILLÉE (MISE À JOUR)
+# PAGE : ANALYSE DÉTAILLÉE
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📊 Analyse détaillée":
     st.markdown('<div class="page-title">Analyse détaillée</div>', unsafe_allow_html=True)
@@ -341,7 +391,6 @@ elif page == "📊 Analyse détaillée":
         st.info("Aucune donnée.")
         st.stop()
 
-    # 1. Filtres globaux
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         comptes_dispo = sorted(df_all['compte'].dropna().unique().tolist())
@@ -355,66 +404,96 @@ elif page == "📊 Analyse détaillée":
     with c4:
         type_sel = st.radio("Type", ["Dépenses", "Revenus", "Tout"], horizontal=True)
 
-    # --- NOUVEAU : Option pour masquer les virements ---
     exclure_virements_ana = st.checkbox("Masquer les virements internes", value=True, key="chk_ana")
 
-    # Application du premier niveau de filtres
     df_filtre = df_all.copy()
     if compte_sel: df_filtre = df_filtre[df_filtre['compte'].isin(compte_sel)]
     if annee_sel: df_filtre = df_filtre[df_filtre['annee'].isin(annee_sel)]
     if mois_sel: df_filtre = df_filtre[df_filtre['mois_label'].isin(mois_sel)]
     
-    # Masquage dynamique de la catégorie "Virement interne"
     if exclure_virements_ana:
         df_filtre = df_filtre[df_filtre['categorie'] != "Virement interne"]
 
-    # 2. Filtres dynamiques (Catégories et Sous-catégories)
     f1, f2 = st.columns(2)
     with f1:
         cats_dispo = sorted(df_filtre['categorie'].dropna().unique())
         cats_sel = st.multiselect("Filtrer par catégories", cats_dispo)
-        if cats_sel:
-            df_filtre = df_filtre[df_filtre['categorie'].isin(cats_sel)]
+        if cats_sel: df_filtre = df_filtre[df_filtre['categorie'].isin(cats_sel)]
     with f2:
         subs_dispo = sorted(df_filtre['sous_categorie'].dropna().unique())
         subs_sel = st.multiselect("Filtrer par sous-catégories", subs_dispo)
-        if subs_sel:
-            df_filtre = df_filtre[df_filtre['sous_categorie'].isin(subs_sel)]
+        if subs_sel: df_filtre = df_filtre[df_filtre['sous_categorie'].isin(subs_sel)]
 
-    # 3. Application du filtre "Type" sur les montants
     if type_sel == "Dépenses":
         df_table = df_filtre[df_filtre['montant'] < 0].copy()
-        df_table['montant'] = df_table['montant'].abs()
+        df_table['montant_abs'] = df_table['montant'].abs()
     elif type_sel == "Revenus":
         df_table = df_filtre[df_filtre['montant'] > 0].copy()
+        df_table['montant_abs'] = df_table['montant'].abs()
     else:
         df_table = df_filtre.copy()
+        df_table['montant_abs'] = df_table['montant'].abs()
 
-    # 4. Affichage des données
     st.markdown('<div class="section-title">Tableau croisé détaillé</div>', unsafe_allow_html=True)
     if not df_table.empty:
-        # Création du tableau croisé
         tcd = df_table.pivot_table(
-            index=['categorie', 'sous_categorie'], 
-            columns='mois_label', 
-            values='montant', 
-            aggfunc='sum', 
-            fill_value=0
+            index=['categorie', 'sous_categorie'], columns='mois_label', 
+            values='montant', aggfunc='sum', fill_value=0
         )
-        
-        # Ajout du Total par ligne
         tcd['TOTAL'] = tcd.sum(axis=1)
-        
-        # Style conditionnel selon Dépenses ou Revenus
         color_max = "#2e0101" if type_sel == "Dépenses" else ("#012e01" if type_sel == "Revenus" else "#333333")
         st.dataframe(tcd.style.format("{:.2f} €").highlight_max(axis=0, color=color_max), use_container_width=True)
         
-        # Résumé par catégorie principale
         st.markdown('### Récapitulatif global par catégorie')
         cat_total = df_table.groupby('categorie')['montant'].sum().reset_index()
-        cat_total = cat_total.rename(columns={'montant': 'Total (€)'}).sort_values('Total (€)', ascending=False)
+        cat_total = cat_total.rename(columns={'montant': 'Total (€)'}).sort_values('Total (€)', ascending=False if type_sel=="Revenus" else True)
         st.dataframe(cat_total.style.format({"Total (€)": "{:.2f} €"}), use_container_width=True)
         
+        # --- NOUVEAU : EVOLUTION MENSUELLE ET POURCENTAGES ---
+        st.markdown('<div class="section-title">📊 Évolution mensuelle croisée</div>', unsafe_allow_html=True)
+        
+        df_group = df_table.groupby(['annee', 'mois_num', 'mois_label', 'categorie'])['montant_abs'].sum().reset_index()
+        df_group = df_group.sort_values(by=['annee', 'mois_num']) 
+
+        totaux_mois = df_group.groupby(['annee', 'mois_num', 'mois_label'])['montant_abs'].sum().reset_index()
+        totaux_mois = totaux_mois.rename(columns={'montant_abs': 'total_mois'})
+        
+        df_group = pd.merge(df_group, totaux_mois, on=['annee', 'mois_num', 'mois_label'])
+        df_group['pourcentage'] = (df_group['montant_abs'] / df_group['total_mois']) * 100
+
+        tab1, tab2, tab3 = st.tabs(["📈 Évolution des Montants", "📊 Évolution des Pourcentages", "🔢 Totaux Mensuels"])
+
+        with tab1:
+            fig_montants = px.line(
+                df_group, x='mois_label', y='montant_abs', color='categorie', markers=True,
+                title=f"Évolution des {type_sel.lower()} par mois",
+                labels={'montant_abs': 'Montant (€)', 'mois_label': 'Mois', 'categorie': 'Catégorie'}
+            )
+            st.plotly_chart(fig_montants, use_container_width=True)
+
+        with tab2:
+            fig_pct = px.area(
+                df_group, x='mois_label', y='pourcentage', color='categorie', markers=True,
+                title="Évolution de la proportion de chaque catégorie (%)",
+                labels={'pourcentage': 'Part du total (%)', 'mois_label': 'Mois', 'categorie': 'Catégorie'}
+            )
+            fig_pct.update_layout(yaxis_ticksuffix="%")
+            st.plotly_chart(fig_pct, use_container_width=True)
+            
+        with tab3:
+            col_totaux = st.columns(min(len(totaux_mois), 4))
+            for i, row in totaux_mois.iterrows():
+                col_index = i % 4
+                with col_totaux[col_index]:
+                    st.metric(label=f"{row['mois_label']}", value=f"{row['total_mois']:,.2f} €")
+
+        # --- NOUVEAU : SANKEY ET HEATMAP ---
+        col_a, col_b = st.columns(2)
+        with col_a:
+            afficher_sankey(df_filtre)
+        with col_b:
+            afficher_heatmap(df_filtre)
+
     else:
         st.warning("Aucune donnée pour cette sélection.")
 
@@ -424,10 +503,7 @@ elif page == "📊 Analyse détaillée":
 elif page == "🏷️ Règles de catégories":
     st.markdown('<div class="page-title">Règles de catégories</div>', unsafe_allow_html=True)
     
-    # 1. On récupère toutes les données existantes pour alimenter les listes déroulantes
     df_all = load_transactions()
-    
-    # On crée la liste des catégories uniques + quelques valeurs par défaut incontournables
     cats_base = ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Virement interne", "Épargne"]
     if not df_all.empty:
         cats_utilisees = [c for c in df_all['categorie'].dropna().unique() if c != "À classer"]
@@ -439,39 +515,27 @@ elif page == "🏷️ Règles de catégories":
     cats_dispo = sorted(set(cats_base + cats_utilisees))
     subs_dispo = sorted(set(subs_utilisees))
 
-    # 2. Le formulaire avec menus déroulants ET possibilité de créer une nouvelle valeur
-   # 2. Le formulaire avec menus déroulants ET possibilité de créer une nouvelle valeur
     with st.form("add_rule_form"):
         c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-        
-        with c1: 
-            mot = st.text_input("Si le libellé contient", key="rule_keyword")
-            
+        with c1: mot = st.text_input("Si le libellé contient", key="rule_keyword")
         with c2: 
             cat_sel = st.selectbox("Catégorie", ["Sélectionner..."] + cats_dispo + ["✏️ NOUVELLE CATÉGORIE"], key="sel_cat")
             cat_new = st.text_input("Nom cat.", placeholder="Nouvelle catégorie...", label_visibility="collapsed", key="input_new_cat")
-            
         with c3: 
             sub_sel = st.selectbox("Sous-catégorie", ["(Aucune)"] + subs_dispo + ["✏️ NOUVELLE SOUS-CAT."], key="sel_sub")
             sub_new = st.text_input("Nom sous-cat.", placeholder="Nouvelle sous-cat...", label_visibility="collapsed", key="input_new_sub")
-            
         with c4: 
             prio = st.number_input("Priorité", 0, 100, 10, key="rule_prio")
         
-        # Le bouton doit être bien aligné dans le bloc "with st.form"
         submit_button = st.form_submit_button("Enregistrer la règle", width='stretch')
 
         if submit_button:
-            # Logique pour décider quelle valeur enregistrer
             final_cat = cat_new.strip() if cat_sel == "✏️ NOUVELLE CATÉGORIE" else (cat_sel if cat_sel != "Sélectionner..." else "")
             final_sub = sub_new.strip() if sub_sel == "✏️ NOUVELLE SOUS-CAT." else (sub_sel if sub_sel != "(Aucune)" else "")
             
             if mot and final_cat:
                 supabase.table("regles").upsert({
-                    "mot_cle": mot.upper(), 
-                    "categorie": final_cat, 
-                    "sous_categorie": final_sub, 
-                    "priorite": prio
+                    "mot_cle": mot.upper(), "categorie": final_cat, "sous_categorie": final_sub, "priorite": prio
                 }, on_conflict="mot_cle").execute()
                 
                 st.success(f"✅ Règle enregistrée : {mot.upper()} -> {final_cat}")
@@ -479,13 +543,12 @@ elif page == "🏷️ Règles de catégories":
             else:
                 st.error("⚠️ Il manque le mot-clé ou la catégorie.")
 
-    # Affichage du tableau des règles existantes
     regles = get_regles()
     st.dataframe(regles, width='stretch')
 
     st.divider()
     st.subheader("🔄 Appliquer les règles aux données existantes")
-    st.info("Ce bouton va scanner TOUTES les transactions (classées et à classer) et appliquer vos règles enregistrées. Attention : cela écrasera les catégories manuelles si une règle correspond au libellé.")
+    st.info("Ce bouton va scanner TOUTES les transactions et appliquer vos règles.")
 
     if st.button("Lancer la mise à jour globale", width='stretch'):
         regles_df = get_regles()
@@ -495,24 +558,17 @@ elif page == "🏷️ Règles de catégories":
             st.warning("Aucune transaction à analyser.")
         else:
             count = 0
-            with st.status("Analyse et catégorisation en cours...", expanded=True) as status:
+            with st.status("Analyse en cours...", expanded=True) as status:
                 for _, row in df_all.iterrows():
                     new_cat, new_sub = categoriser(row['libelle'], regles_df)
-                    
-                    # On applique la règle SI elle a trouvé une correspondance
                     if new_cat != "À classer":
-                        # Optimisation : on ne met à jour Supabase que si ça a vraiment changé
-                        # (évite de faire 500 requêtes inutiles si les lignes sont déjà bonnes)
                         cat_actuelle = row['categorie'] if pd.notna(row['categorie']) else ""
                         sub_actuelle = row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie', '')) else ""
-                        
                         if cat_actuelle != new_cat or sub_actuelle != new_sub:
                             supabase.table("transactions").update({
-                                "categorie": new_cat, 
-                                "sous_categorie": new_sub
+                                "categorie": new_cat, "sous_categorie": new_sub
                             }).eq("id", row['id']).execute()
                             count += 1
-                            
                 status.update(label=f"Terminé ! {count} transactions mises à jour.", state="complete")
             st.rerun()
 
@@ -542,7 +598,6 @@ elif page == "✏️ Recatégoriser":
 
     df_show = df_all.copy()
     if filtre == "À classer uniquement":
-        # Le fameux correctif est ici
         df_show = df_show[(df_show['categorie'] == "À classer") | (df_show['categorie'].isna())]
     if compte_f != "Tous":
         df_show = df_show[df_show['compte'] == compte_f]
