@@ -38,23 +38,23 @@ def load_transactions(comptes=None, annees=None, exclure_cat=None):
         res = supabase.table("transactions").select("*").execute()
         if not res.data:
             return pd.DataFrame()
-        
+
         df = pd.DataFrame(res.data)
-        
+
         df['montant'] = pd.to_numeric(df['montant'], errors='coerce')
         df['date'] = pd.to_datetime(df['date'])
-        
+
         df['mois_num'] = df['date'].dt.month
         df['annee'] = df['date'].dt.year
         df['mois_label'] = df['date'].dt.strftime('%Y-%m')
-        
+
         if comptes:
             df = df[df['compte'].isin(comptes)]
         if annees:
             df = df[df['annee'].isin(annees)]
         if exclure_cat:
             df = df[~df['categorie'].isin(exclure_cat)]
-            
+
         return df
     except Exception as e:
         st.error(f"Erreur chargement transactions : {e}")
@@ -63,20 +63,20 @@ def load_transactions(comptes=None, annees=None, exclure_cat=None):
 # ── NOUVELLES FONCTIONS D'ANALYSE (Sankey & Heatmap) ─────────────────────────
 def afficher_sankey(df_filtre):
     st.markdown('<div class="section-title">🌊 Flux de trésorerie</div>', unsafe_allow_html=True)
-    
+
     total_revenus = df_filtre[df_filtre['montant'] > 0]['montant'].sum()
     df_dep = df_filtre[df_filtre['montant'] < 0].groupby('categorie')['montant'].sum().abs().reset_index()
-    
+
     if total_revenus == 0 or df_dep.empty:
         st.info("Données insuffisantes pour générer le flux (nécessite revenus et dépenses).")
         return
 
     total_depenses = df_dep['montant'].sum()
     df_dep['proportion'] = df_dep['montant'] / total_depenses
-    
+
     df_principales = df_dep[df_dep['proportion'] >= 0.02].copy()
     df_autres = df_dep[df_dep['proportion'] < 0.02]
-    
+
     if not df_autres.empty:
         autres_sum = df_autres['montant'].sum()
         df_principales = pd.concat(
@@ -85,44 +85,31 @@ def afficher_sankey(df_filtre):
         )
 
     reste = max(0, total_revenus - total_depenses)
-
     labels = ["Revenus"] + df_principales['categorie'].tolist()
     if reste > 0:
         labels.append("Épargne / Restant")
-    
-    sources = []
-    targets = []
-    values = []
-    
-    # FIX : utilisation de enumerate pour un index correct
+
+    sources, targets, values = [], [], []
     for i, (_, row) in enumerate(df_principales.iterrows()):
         sources.append(0)
         targets.append(i + 1)
         values.append(row['montant'])
-        
+
     if reste > 0:
         sources.append(0)
         targets.append(len(labels) - 1)
         values.append(reste)
 
     fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15, thickness=20,
-            line=dict(color="black", width=0.5),
-            label=labels,
-            color="#4c78a8"
-        ),
-        link=dict(
-            source=sources, target=targets, value=values,
-            color="rgba(169, 172, 182, 0.4)"
-        )
+        node=dict(pad=15, thickness=20, line=dict(color="black", width=0.5), label=labels, color="#4c78a8"),
+        link=dict(source=sources, target=targets, value=values, color="rgba(169, 172, 182, 0.4)")
     )])
     fig.update_layout(margin=dict(t=20, b=20, l=20, r=20), font_size=12, height=400)
     st.plotly_chart(fig, use_container_width=True)
 
 def afficher_heatmap(df_filtre):
     st.markdown('<div class="section-title">📅 Intensité par jour</div>', unsafe_allow_html=True)
-    
+
     df_heat = df_filtre[df_filtre['montant'] < 0].copy()
     if df_heat.empty:
         st.info("Aucune dépense à afficher.")
@@ -134,7 +121,7 @@ def afficher_heatmap(df_filtre):
         'Thursday': 'Jeudi', 'Friday': 'Vendredi', 'Saturday': 'Samedi', 'Sunday': 'Dimanche'
     }
     df_heat['jour_semaine'] = df_heat['date'].dt.day_name().map(day_name_map)
-    
+
     heatmap_data = df_heat.groupby(['mois_label', 'jour_semaine'])['montant'].sum().abs().reset_index()
     heatmap_pivot = heatmap_data.pivot(index='jour_semaine', columns='mois_label', values='montant').fillna(0)
     heatmap_pivot = heatmap_pivot.reindex(jours_ordre).fillna(0)
@@ -155,7 +142,6 @@ st.set_page_config(page_title="Budget Cloud", layout="wide", page_icon="💳")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&display=swap');
-
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 .main { padding: 2rem; }
 .page-title { font-family: 'DM Serif Display', serif; font-size: 2.4rem; margin-bottom: 0.2rem; }
@@ -199,7 +185,7 @@ if page == "🏠 Tableau de bord":
         compte_sel = st.selectbox("Compte", comptes_dispo)
     with col3:
         exclure_virements = st.checkbox("Masquer les virements internes", value=True)
-        
+
     c4, c5 = st.columns(2)
     with c4:
         mois_dispo = sorted(df_all[df_all['annee'] == annee_sel]['mois_label'].unique())
@@ -213,7 +199,7 @@ if page == "🏠 Tableau de bord":
         annees=[annee_sel],
         exclure_cat=["Virement interne"] if exclure_virements else None
     )
-    
+
     if mois_sel:
         df = df[df['mois_label'].isin(mois_sel)]
     if cat_sel:
@@ -259,7 +245,6 @@ if page == "🏠 Tableau de bord":
     df_dep.loc[df_dep['sous_categorie'] == '', 'sous_categorie'] = 'Général'
 
     col_g1, col_g2 = st.columns([1, 1])
-
     with col_g1:
         if not df_dep.empty:
             fig_sun = px.sunburst(
@@ -275,7 +260,6 @@ if page == "🏠 Tableau de bord":
             by_cat_sub = df_dep.groupby(['categorie', 'sous_categorie'])['montant_abs'].sum().reset_index()
             top_10_cats = df_dep.groupby('categorie')['montant_abs'].sum().nlargest(10).index
             by_cat_sub = by_cat_sub[by_cat_sub['categorie'].isin(top_10_cats)]
-
             fig_bar = px.bar(
                 by_cat_sub, x='montant_abs', y='categorie', color='sous_categorie',
                 orientation='h', color_discrete_sequence=px.colors.qualitative.Pastel
@@ -287,7 +271,7 @@ if page == "🏠 Tableau de bord":
                 margin=dict(t=20, b=20, l=20, r=20)
             )
             st.plotly_chart(fig_bar, use_container_width=True, theme="streamlit")
-            
+
     st.markdown('<div class="section-title">Évolution mensuelle globale</div>', unsafe_allow_html=True)
 
     monthly = df.groupby('mois_label').agg(
@@ -305,15 +289,15 @@ if page == "🏠 Tableau de bord":
     )
     st.plotly_chart(fig_line, use_container_width=True, theme="streamlit")
 
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 # PAGE : JOURNAL DES DONNÉES
-# ──────────────────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 elif page == "🔍 Journal des données":
     st.markdown('<div class="page-title">Journal des transactions</div>', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Vue brute de la base de données</div>', unsafe_allow_html=True)
-    
+
     df = load_transactions()
-    
+
     if df.empty:
         st.info("La base de données est vide.")
     else:
@@ -338,19 +322,19 @@ elif page == "📥 Importer CSV":
     st.markdown('<div class="page-title">Importer des transactions</div>', unsafe_allow_html=True)
     compte_nom = st.text_input("Nom du compte (ex: Compte Courant)", "Principal")
     uploaded = st.file_uploader("Choisir un fichier CSV", type="csv")
-    
+
     if uploaded:
         df_raw = pd.read_csv(uploaded, sep=None, engine='python')
         st.write("Aperçu du fichier :")
         st.dataframe(df_raw.head(3))
-        
+
         cols = df_raw.columns.tolist()
         c1, c2, c3, c4 = st.columns(4)
         col_d = c1.selectbox("Date", cols)
         col_l = c2.selectbox("Libellé", cols)
         col_m = c3.selectbox("Montant", cols)
         col_s = c4.selectbox("Solde", cols)
-        
+
         if st.button("🚀 Lancer l'importation"):
             regles = get_regles()
             to_insert = []
@@ -365,17 +349,16 @@ elif page == "📥 Importer CSV":
                     m_raw = str(row[col_m]).replace(',', '.').replace(' ', '').replace('\xa0', '')
                     mt = float(m_raw)
 
-                    # FIX : solde correctement parsé ET inclus dans le dict
                     s_raw = str(row[col_s]).replace(',', '.').replace(' ', '').replace('\xa0', '')
                     solde_val = float(s_raw)
 
                     cat, sub = categoriser(row[col_l], regles)
-                    
+
                     to_insert.append({
                         "date": dt.strftime('%Y-%m-%d'),
                         "libelle": str(row[col_l]),
                         "montant": mt,
-                        "solde": solde_val,       # FIX : colonne solde ajoutée
+                        "solde": solde_val,
                         "compte": compte_nom,
                         "categorie": cat,
                         "sous_categorie": sub,
@@ -383,16 +366,14 @@ elif page == "📥 Importer CSV":
                     })
                 except Exception:
                     continue
-            
+
             if to_insert:
                 df_to_upsert = pd.DataFrame(to_insert)
-                # FIX : groupby inclut 'solde' qui existe maintenant dans le DataFrame
                 df_to_upsert['occurrence'] = df_to_upsert.groupby(
                     ['date', 'libelle', 'montant', 'compte', 'solde']
                 ).cumcount()
-                
-                final_list = df_to_upsert.to_dict(orient='records')
 
+                final_list = df_to_upsert.to_dict(orient='records')
                 try:
                     supabase.table("transactions").upsert(
                         final_list,
@@ -417,7 +398,7 @@ elif page == "📥 Importer CSV":
 elif page == "📊 Analyse détaillée":
     st.markdown('<div class="page-title">Analyse détaillée</div>', unsafe_allow_html=True)
     df_all = load_transactions()
-    
+
     if df_all.empty:
         st.info("Aucune donnée.")
         st.stop()
@@ -473,22 +454,22 @@ elif page == "📊 Analyse détaillée":
         tcd['TOTAL'] = tcd.sum(axis=1)
         color_max = "#2e0101" if type_sel == "Dépenses" else ("#012e01" if type_sel == "Revenus" else "#333333")
         st.dataframe(tcd.style.format("{:.2f} €").highlight_max(axis=0, color=color_max), use_container_width=True)
-        
+
         st.markdown('### Récapitulatif global par catégorie')
         cat_total = df_table.groupby('categorie')['montant'].sum().reset_index()
         cat_total = cat_total.rename(columns={'montant': 'Total (€)'}).sort_values(
             'Total (€)', ascending=False if type_sel == "Revenus" else True
         )
         st.dataframe(cat_total.style.format({"Total (€)": "{:.2f} €"}), use_container_width=True)
-        
+
         st.markdown('<div class="section-title">📊 Évolution mensuelle croisée</div>', unsafe_allow_html=True)
-        
+
         df_group = df_table.groupby(['annee', 'mois_num', 'mois_label', 'categorie'])['montant_abs'].sum().reset_index()
         df_group = df_group.sort_values(by=['annee', 'mois_num'])
 
         totaux_mois = df_group.groupby(['annee', 'mois_num', 'mois_label'])['montant_abs'].sum().reset_index()
         totaux_mois = totaux_mois.rename(columns={'montant_abs': 'total_mois'})
-        
+
         df_group = pd.merge(df_group, totaux_mois, on=['annee', 'mois_num', 'mois_label'])
         df_group['pourcentage'] = (df_group['montant_abs'] / df_group['total_mois']) * 100
 
@@ -512,7 +493,6 @@ elif page == "📊 Analyse détaillée":
             st.plotly_chart(fig_pct, use_container_width=True)
 
         with tab3:
-            # FIX : colonnes dynamiques sans risque d'index hors bornes
             nb_cols = min(len(totaux_mois), 4)
             if nb_cols > 0:
                 col_totaux = st.columns(nb_cols)
@@ -534,7 +514,7 @@ elif page == "📊 Analyse détaillée":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "🏷️ Règles de catégories":
     st.markdown('<div class="page-title">Règles de catégories</div>', unsafe_allow_html=True)
-    
+
     df_all = load_transactions()
     cats_base = ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Virement interne", "Épargne"]
     if not df_all.empty:
@@ -543,13 +523,14 @@ elif page == "🏷️ Règles de catégories":
     else:
         cats_utilisees = []
         subs_utilisees = []
-        
+
     cats_dispo = sorted(set(cats_base + cats_utilisees))
     subs_dispo = sorted(set(subs_utilisees))
 
     with st.form("add_rule_form"):
         c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-        with c1: mot = st.text_input("Si le libellé contient", key="rule_keyword")
+        with c1:
+            mot = st.text_input("Si le libellé contient", key="rule_keyword")
         with c2:
             cat_sel = st.selectbox("Catégorie", ["Sélectionner..."] + cats_dispo + ["✏️ NOUVELLE CATÉGORIE"], key="sel_cat")
             cat_new = st.text_input("Nom cat.", placeholder="Nouvelle catégorie...", label_visibility="collapsed", key="input_new_cat")
@@ -558,13 +539,13 @@ elif page == "🏷️ Règles de catégories":
             sub_new = st.text_input("Nom sous-cat.", placeholder="Nouvelle sous-cat...", label_visibility="collapsed", key="input_new_sub")
         with c4:
             prio = st.number_input("Priorité", 0, 100, 10, key="rule_prio")
-        
+
         submit_button = st.form_submit_button("Enregistrer la règle", use_container_width=True)
 
         if submit_button:
             final_cat = cat_new.strip() if cat_sel == "✏️ NOUVELLE CATÉGORIE" else (cat_sel if cat_sel != "Sélectionner..." else "")
             final_sub = sub_new.strip() if sub_sel == "✏️ NOUVELLE SOUS-CAT." else (sub_sel if sub_sel != "(Aucune)" else "")
-            
+
             if mot and final_cat:
                 supabase.table("regles").upsert({
                     "mot_cle": mot.upper(), "categorie": final_cat, "sous_categorie": final_sub, "priorite": prio
@@ -584,7 +565,7 @@ elif page == "🏷️ Règles de catégories":
     if st.button("Lancer la mise à jour globale", use_container_width=True):
         regles_df = get_regles()
         df_all = load_transactions()
-        
+
         if df_all.empty:
             st.warning("Aucune transaction à analyser.")
         else:
@@ -615,7 +596,7 @@ elif page == "🏷️ Règles de catégories":
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "✏️ Recatégoriser":
     st.markdown('<div class="page-title">Recatégoriser</div>', unsafe_allow_html=True)
-    
+
     df_all = load_transactions()
     if df_all.empty:
         st.info("Aucune transaction.")
@@ -636,22 +617,15 @@ elif page == "✏️ Recatégoriser":
     df_show = df_show.sort_values('date', ascending=False)
     st.markdown(f"**{len(df_show)} transaction(s)**", unsafe_allow_html=True)
 
+    # Initialisation AVANT utilisation
+    if 'extra_cats' not in st.session_state:
+        st.session_state.extra_cats = []
+
     all_cats = sorted(set(
         [c for c in df_all['categorie'].unique() if pd.notna(c)] +
         ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"] +
         st.session_state.extra_cats
     ))
-
-    if 'extra_cats' not in st.session_state:
-        st.session_state.extra_cats = []
-
-    for _, row in df_show.head(50).iterrows():
-
-        all_cats = sorted(set(
-        [c for c in df_all['categorie'].unique() if pd.notna(c)] +
-        ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"] +
-         st.session_state.extra_cats
-))
 
     for _, row in df_show.head(50).iterrows():
         with st.container():
@@ -664,33 +638,31 @@ elif page == "✏️ Recatégoriser":
                 st.markdown(f"{color} **{row['montant']:+,.2f} €**")
                 current_cat = row['categorie'] if pd.notna(row['categorie']) else "À classer"
                 st.caption(f"Actuel : {current_cat} / {row.get('sous_categorie', '')}")
-            
             with col3:
                 cat_options = all_cats + ["✏️ NOUVELLE CATÉGORIE"]
                 selected_cat = st.selectbox(
-                "Cat", cat_options,
-                index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
-                key=f"cat_{row['id']}", label_visibility="collapsed"
-        )
-    if selected_cat == "✏️ NOUVELLE CATÉGORIE":
-        new_cat = st.text_input(
-            "Nouvelle cat.", placeholder="Nom de la catégorie...",
-            key=f"newcat_{row['id']}", label_visibility="collapsed"
-        )
-    else:
-        new_cat = selected_cat
-
-    new_sub = st.text_input(
-        "Sub",
-        value=row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie')) else '',
-        key=f"sub_{row['id']}", label_visibility="collapsed", placeholder="Sous-catégorie"
-    )
+                    "Cat", cat_options,
+                    index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
+                    key=f"cat_{row['id']}", label_visibility="collapsed"
+                )
+                if selected_cat == "✏️ NOUVELLE CATÉGORIE":
+                    new_cat = st.text_input(
+                        "Nouvelle cat.", placeholder="Nom de la catégorie...",
+                        key=f"newcat_{row['id']}", label_visibility="collapsed"
+                    )
+                else:
+                    new_cat = selected_cat
+                new_sub = st.text_input(
+                    "Sub",
+                    value=row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie')) else '',
+                    key=f"sub_{row['id']}", label_visibility="collapsed", placeholder="Sous-catégorie"
+                )
             with col4:
                 if st.button("💾", key=f"save_{row['id']}"):
-    if new_cat and new_cat not in st.session_state.extra_cats:
-        st.session_state.extra_cats.append(new_cat)
-    supabase.table("transactions").update(
-        {"categorie": new_cat, "sous_categorie": new_sub}
-    ).eq("id", row['id']).execute()
-    st.rerun()
+                    if new_cat and new_cat not in st.session_state.extra_cats:
+                        st.session_state.extra_cats.append(new_cat)
+                    supabase.table("transactions").update(
+                        {"categorie": new_cat, "sous_categorie": new_sub}
+                    ).eq("id", row['id']).execute()
+                    st.rerun()
             st.divider()
