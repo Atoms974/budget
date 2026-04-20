@@ -638,10 +638,14 @@ elif page == "✏️ Recatégoriser":
 
     all_cats = sorted(set(
         [c for c in df_all['categorie'].unique() if pd.notna(c)] +
-        ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"]
+        ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"] +
+        st.session_state.extra_cats
     ))
-if 'extra_cats' not in st.session_state:
-    st.session_state.extra_cats = []
+
+    if 'extra_cats' not in st.session_state:
+        st.session_state.extra_cats = []
+
+    for _, row in df_show.head(50).iterrows():
 
 all_cats = sorted(set(
     [c for c in df_all['categorie'].unique() if pd.notna(c)] +
