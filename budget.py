@@ -640,6 +640,14 @@ elif page == "✏️ Recatégoriser":
         [c for c in df_all['categorie'].unique() if pd.notna(c)] +
         ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"]
     ))
+if 'extra_cats' not in st.session_state:
+    st.session_state.extra_cats = []
+
+all_cats = sorted(set(
+    [c for c in df_all['categorie'].unique() if pd.notna(c)] +
+    ["Alimentation", "Transport", "Logement", "Santé", "Loisirs", "Revenus", "Banque", "Épargne"] +
+    st.session_state.extra_cats
+))
 
     for _, row in df_show.head(50).iterrows():
         with st.container():
@@ -653,20 +661,34 @@ elif page == "✏️ Recatégoriser":
                 current_cat = row['categorie'] if pd.notna(row['categorie']) else "À classer"
                 st.caption(f"Actuel : {current_cat} / {row.get('sous_categorie', '')}")
             with col3:
-                new_cat = st.selectbox(
-                    "Cat", all_cats,
-                    index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
-                    key=f"cat_{row['id']}", label_visibility="collapsed"
-                )
-                new_sub = st.text_input(
-                    "Sub",
-                    value=row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie')) else '',
-                    key=f"sub_{row['id']}", label_visibility="collapsed", placeholder="Sous-catégorie"
+                # APRÈS
+with col3:
+    cat_options = all_cats + ["✏️ NOUVELLE CATÉGORIE"]
+    selected_cat = st.selectbox(
+        "Cat", cat_options,
+        index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
+        key=f"cat_{row['id']}", label_visibility="collapsed"
+    )
+    if selected_cat == "✏️ NOUVELLE CATÉGORIE":
+        new_cat = st.text_input(
+            "Nouvelle cat.", placeholder="Nom de la catégorie...",
+            key=f"newcat_{row['id']}", label_visibility="collapsed"
+        )
+    else:
+        new_cat = selected_cat
+
+    new_sub = st.text_input(
+        "Sub",
+        value=row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie')) else '',
+        key=f"sub_{row['id']}", label_visibility="collapsed", placeholder="Sous-catégorie"
+    )
                 )
             with col4:
                 if st.button("💾", key=f"save_{row['id']}"):
-                    supabase.table("transactions").update(
-                        {"categorie": new_cat, "sous_categorie": new_sub}
-                    ).eq("id", row['id']).execute()
-                    st.rerun()
+    if new_cat and new_cat not in st.session_state.extra_cats:
+        st.session_state.extra_cats.append(new_cat)
+    supabase.table("transactions").update(
+        {"categorie": new_cat, "sous_categorie": new_sub}
+    ).eq("id", row['id']).execute()
+    st.rerun()
             st.divider()
