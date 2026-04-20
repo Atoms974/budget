@@ -664,15 +664,14 @@ elif page == "✏️ Recatégoriser":
                 st.markdown(f"{color} **{row['montant']:+,.2f} €**")
                 current_cat = row['categorie'] if pd.notna(row['categorie']) else "À classer"
                 st.caption(f"Actuel : {current_cat} / {row.get('sous_categorie', '')}")
+            
             with col3:
-                # APRÈS
-with col3:
-    cat_options = all_cats + ["✏️ NOUVELLE CATÉGORIE"]
-    selected_cat = st.selectbox(
-        "Cat", cat_options,
-        index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
-        key=f"cat_{row['id']}", label_visibility="collapsed"
-    )
+                cat_options = all_cats + ["✏️ NOUVELLE CATÉGORIE"]
+                selected_cat = st.selectbox(
+                "Cat", cat_options,
+                index=all_cats.index(row['categorie']) if row['categorie'] in all_cats else 0,
+                key=f"cat_{row['id']}", label_visibility="collapsed"
+        )
     if selected_cat == "✏️ NOUVELLE CATÉGORIE":
         new_cat = st.text_input(
             "Nouvelle cat.", placeholder="Nom de la catégorie...",
