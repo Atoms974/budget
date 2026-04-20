@@ -686,7 +686,6 @@ with col3:
         value=row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie')) else '',
         key=f"sub_{row['id']}", label_visibility="collapsed", placeholder="Sous-catégorie"
     )
-        )
             with col4:
                 if st.button("💾", key=f"save_{row['id']}"):
     if new_cat and new_cat not in st.session_state.extra_cats:
