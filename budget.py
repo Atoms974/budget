@@ -18,18 +18,22 @@ def get_regles():
     try:
         res = supabase.table("regles").select("*").order("priorite", desc=True).execute()
         if not res.data:
-            return pd.DataFrame(columns=['id', 'mot_cle', 'categorie', 'sous_categorie', 'priorite'])
+            return pd.DataFrame(columns=['id', 'mot_cle', 'categorie', 'sous_categorie', 'priorite', 'compte'])
         return pd.DataFrame(res.data)
     except Exception as e:
         st.error(f"Erreur chargement des règles : {e}")
-        return pd.DataFrame(columns=['id', 'mot_cle', 'categorie', 'sous_categorie', 'priorite'])
+        return pd.DataFrame(columns=['id', 'mot_cle', 'categorie', 'sous_categorie', 'priorite', 'compte'])
 
-def categoriser(libelle, regles_df):
+def categoriser(libelle, regles_df, compte=None):
     if regles_df.empty:
         return "À classer", ""
     l = str(libelle).upper()
     for _, row in regles_df.iterrows():
         if str(row['mot_cle']).upper() in l:
+            regle_compte = row.get('compte', None)
+            if regle_compte and pd.notna(regle_compte) and str(regle_compte).strip() != "":
+                if compte != regle_compte:
+                    continue
             return row['categorie'], row.get('sous_categorie', '')
     return "À classer", ""
 
@@ -60,7 +64,7 @@ def load_transactions(comptes=None, annees=None, exclure_cat=None):
         st.error(f"Erreur chargement transactions : {e}")
         return pd.DataFrame()
 
-# ── NOUVELLES FONCTIONS D'ANALYSE (Sankey & Heatmap) ─────────────────────────
+# ── FONCTIONS D'ANALYSE ───────────────────────────────────────────────────────
 def afficher_sankey(df_filtre):
     st.markdown('<div class="section-title">🌊 Flux de trésorerie</div>', unsafe_allow_html=True)
 
@@ -352,7 +356,8 @@ elif page == "📥 Importer CSV":
                     s_raw = str(row[col_s]).replace(',', '.').replace(' ', '').replace('\xa0', '')
                     solde_val = float(s_raw)
 
-                    cat, sub = categoriser(row[col_l], regles)
+                    # On passe le compte à categoriser() pour filtrage par compte
+                    cat, sub = categoriser(row[col_l], regles, compte=compte_nom)
 
                     to_insert.append({
                         "date": dt.strftime('%Y-%m-%d'),
@@ -520,15 +525,17 @@ elif page == "🏷️ Règles de catégories":
     if not df_all.empty:
         cats_utilisees = [c for c in df_all['categorie'].dropna().unique() if c != "À classer"]
         subs_utilisees = [s for s in df_all['sous_categorie'].dropna().unique() if str(s).strip() != ""]
+        comptes_existants = ["Tous les comptes"] + sorted(df_all['compte'].dropna().unique().tolist())
     else:
         cats_utilisees = []
         subs_utilisees = []
+        comptes_existants = ["Tous les comptes"]
 
     cats_dispo = sorted(set(cats_base + cats_utilisees))
     subs_dispo = sorted(set(subs_utilisees))
 
     with st.form("add_rule_form"):
-        c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+        c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 1, 2])
         with c1:
             mot = st.text_input("Si le libellé contient", key="rule_keyword")
         with c2:
@@ -539,18 +546,27 @@ elif page == "🏷️ Règles de catégories":
             sub_new = st.text_input("Nom sous-cat.", placeholder="Nouvelle sous-cat...", label_visibility="collapsed", key="input_new_sub")
         with c4:
             prio = st.number_input("Priorité", 0, 100, 10, key="rule_prio")
+        with c5:
+            compte_regle = st.selectbox("Compte", comptes_existants, key="rule_compte",
+                                        help="Restreindre cette règle à un compte spécifique, ou laisser 'Tous les comptes'")
 
         submit_button = st.form_submit_button("Enregistrer la règle", use_container_width=True)
 
         if submit_button:
             final_cat = cat_new.strip() if cat_sel == "✏️ NOUVELLE CATÉGORIE" else (cat_sel if cat_sel != "Sélectionner..." else "")
             final_sub = sub_new.strip() if sub_sel == "✏️ NOUVELLE SOUS-CAT." else (sub_sel if sub_sel != "(Aucune)" else "")
+            final_compte = None if compte_regle == "Tous les comptes" else compte_regle
 
             if mot and final_cat:
                 supabase.table("regles").upsert({
-                    "mot_cle": mot.upper(), "categorie": final_cat, "sous_categorie": final_sub, "priorite": prio
+                    "mot_cle": mot.upper(),
+                    "categorie": final_cat,
+                    "sous_categorie": final_sub,
+                    "priorite": prio,
+                    "compte": final_compte,
                 }, on_conflict="mot_cle").execute()
-                st.success(f"✅ Règle enregistrée : {mot.upper()} -> {final_cat}")
+                label_compte = f" (compte : {final_compte})" if final_compte else " (tous les comptes)"
+                st.success(f"✅ Règle enregistrée : {mot.upper()} -> {final_cat}{label_compte}")
                 st.rerun()
             else:
                 st.error("⚠️ Il manque le mot-clé ou la catégorie.")
@@ -572,7 +588,8 @@ elif page == "🏷️ Règles de catégories":
             count = 0
             with st.status("Analyse en cours...", expanded=True) as status:
                 for _, row in df_all.iterrows():
-                    new_cat, new_sub = categoriser(row['libelle'], regles_df)
+                    # On passe le compte de la transaction pour respecter les règles par compte
+                    new_cat, new_sub = categoriser(row['libelle'], regles_df, compte=row.get('compte'))
                     if new_cat != "À classer":
                         cat_actuelle = row['categorie'] if pd.notna(row['categorie']) else ""
                         sub_actuelle = row.get('sous_categorie', '') if pd.notna(row.get('sous_categorie', '')) else ""
@@ -617,7 +634,6 @@ elif page == "✏️ Recatégoriser":
     df_show = df_show.sort_values('date', ascending=False)
     st.markdown(f"**{len(df_show)} transaction(s)**", unsafe_allow_html=True)
 
-    # Initialisation AVANT utilisation
     if 'extra_cats' not in st.session_state:
         st.session_state.extra_cats = []
 
