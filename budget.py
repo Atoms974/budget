@@ -248,16 +248,40 @@ if page == "🏠 Tableau de bord":
     df_dep['sous_categorie'] = df_dep['sous_categorie'].fillna('Général')
     df_dep.loc[df_dep['sous_categorie'] == '', 'sous_categorie'] = 'Général'
 
+    # Filtres d'exclusion pour le sunburst
+    with st.expander("🎛️ Filtrer le diagramme"):
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            cats_a_masquer = st.multiselect(
+                "Masquer ces catégories",
+                sorted(df_dep['categorie'].dropna().unique()),
+                key="sun_cats_masquer"
+            )
+        with fc2:
+            subs_a_masquer = st.multiselect(
+                "Masquer ces sous-catégories",
+                sorted(df_dep['sous_categorie'].dropna().unique()),
+                key="sun_subs_masquer"
+            )
+
+    df_sun = df_dep.copy()
+    if cats_a_masquer:
+        df_sun = df_sun[~df_sun['categorie'].isin(cats_a_masquer)]
+    if subs_a_masquer:
+        df_sun = df_sun[~df_sun['sous_categorie'].isin(subs_a_masquer)]
+
     col_g1, col_g2 = st.columns([1, 1])
     with col_g1:
-        if not df_dep.empty:
+        if not df_sun.empty:
             fig_sun = px.sunburst(
-                df_dep, path=['categorie', 'sous_categorie'], values='montant_abs',
+                df_sun, path=['categorie', 'sous_categorie'], values='montant_abs',
                 color_discrete_sequence=px.colors.qualitative.Pastel
             )
             fig_sun.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20, l=20, r=20))
             fig_sun.update_traces(hovertemplate='<b>%{label}</b><br>Montant: %{value:.2f} €<br>Part: %{percentParent:.1%}')
             st.plotly_chart(fig_sun, use_container_width=True, theme="streamlit")
+        else:
+            st.info("Aucune donnée après filtrage.")
 
     with col_g2:
         if not df_dep.empty:
