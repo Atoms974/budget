@@ -39,11 +39,22 @@ def categoriser(libelle, regles_df, compte=None):
 
 def load_transactions(comptes=None, annees=None, exclure_cat=None):
     try:
-        res = supabase.table("transactions").select("*").execute()
-        if not res.data:
-            return pd.DataFrame()
+        # Pagination pour contourner la limite de 1000 lignes de Supabase
+        all_data = []
+        limit = 1000
+        offset = 0
+        while True:
+            res = supabase.table("transactions").select("*").range(offset, offset + limit - 1).execute()
+            if not res.data:
+                break
+            all_data.extend(res.data)
+            if len(res.data) < limit:
+                break  # dernière page atteinte
+            offset += limit
 
-        df = pd.DataFrame(res.data)
+        if not all_data:
+            return pd.DataFrame()
+        df = pd.DataFrame(all_data)
 
         df['montant'] = pd.to_numeric(df['montant'], errors='coerce')
         df['date'] = pd.to_datetime(df['date'])
